@@ -1,9 +1,15 @@
 (() => {
-  removeShorts();
-  setInterval(removeShorts, 2000);
+  chrome.runtime.onMessage.addListener((obj, sender, response) => {
+    const { type, source } = obj;
 
-  removeReels();
-  setInterval(removeReels, 2000);
+    if (source === "fb") {
+      removeReels();
+      setInterval(removeReels, 2000);
+    } else if (source === "yt") {
+      removeShorts();
+      setInterval(removeShorts, 2000);
+    }
+  });
 
   function removeShorts() {
     shorts = document.querySelectorAll("ytd-rich-section-renderer");
