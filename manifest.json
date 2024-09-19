@@ -1,15 +1,15 @@
 {
   "name": "Attention",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Multi feature Extention to improve your work",
   "permissions": ["tabs"],
-  "host_permissions": ["https://*.youtube.com/*"],
+  "host_permissions": ["https://*.youtube.com/*", "https://*.facebook.com/*"],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://*.youtube.com/*"],
+      "matches": ["https://*.youtube.com/*", "https://*.facebook.com/*"],
       "js": ["contentScript.js"]
     }
   ],
@@ -21,7 +21,7 @@
         "assets/delete.png",
         "assets/save.png"
       ],
-      "matches": ["https://*.youtube.com/*"]
+      "matches": ["https://*.youtube.com/*", "https://*.facebook.com/*"]
     }
   ],
   "action": {
