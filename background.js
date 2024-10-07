@@ -6,8 +6,15 @@ chrome.tabs.onUpdated.addListener((tabId, _, tab) => {
     if (tab.url && tab.url.includes("youtube.com")) {
         tabUrl = "youtube.com";
         properties["url"] = tab.url;
+
         if (tab.url.includes("watch")) {
             properties["source"] = "yt-watch";
+
+            const queryParameters = tab.url.split("?")[1];
+            const urlParameters = new URLSearchParams(queryParameters);
+            properties["videoId"] = urlParameters.get("v");
+
+            console.log("url parameters: " + urlParameters);
         } else {
             properties["source"] = "yt-home";
         }
