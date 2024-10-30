@@ -9,6 +9,7 @@ chrome.tabs.onUpdated.addListener((tabId, _, tab) => {
 
         if (tab.url.includes("watch")) {
             properties["source"] = "yt-watch";
+            properties["type"] = "NEW";
 
             const queryParameters = tab.url.split("?")[1];
             const urlParameters = new URLSearchParams(queryParameters);
@@ -27,6 +28,7 @@ chrome.tabs.onUpdated.addListener((tabId, _, tab) => {
     }
 
     if (allowedUrls.includes(tabUrl)) {
+        //console.log("TAB url: " + tabUrl);
         chrome.tabs.sendMessage(tabId, properties);
     }
 });

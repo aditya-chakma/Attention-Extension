@@ -12,26 +12,45 @@
             intervalId = setInterval(removeReels, 2000);
         } else if (source === "yt-home" || source === "yt-watch") {
             if (source === "yt-watch") {
-                bookMark(obj);
+                bookMark(obj, response);
             }
+
             removeShorts(source);
-            intervalId = setInterval(removeShorts, 2000);
+            intervalId = setInterval(() => removeShorts(source), 2000);
         }
     });
 
-    function bookMark(obj) {
-        const { source, videoId } = obj;
+    function bookMark(obj, response) {
+        const { type, source, value, videoId } = obj;
 
         if (source !== "yt-watch") {
             return;
         }
 
-        currentVideo = videoId;
-        newVideoLoaded();
+        if (type === "NEW") {
+            currentVideo = videoId;
+            newVideoLoaded();
+        } else if (type === "PLAY") {
+            youtubePlayer.currentTime = value;
+        } else if (type === "DELETE") {
+            currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != value);
+            chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) });
+
+            response(currentVideoBookmarks);
+        }
     }
+
+    const fetchBookmarks = () => {
+        return new Promise((resolve) => {
+            chrome.storage.sync.get([currentVideo], (obj) => {
+                resolve(obj[currentVideo] ? JSON.parse(obj[currentVideo]) : []);
+            });
+        });
+    };
 
     const newVideoLoaded = async () => {
         const bookmarkBtnExist = document.getElementsByClassName("bookmark-btn")[0];
+        currentVideoBookmarks = await fetchBookmarks();
 
         console.log("yt-watch content");
 
@@ -52,6 +71,21 @@
 
     // call on page reload
     //newVideoLoaded();
+
+    const addNewBookmarkEventHandler = async () => {
+        const currentTime = youtubePlayer.currentTime;
+        const newBookmark = {
+            time: currentTime,
+            desc: "Bookmark at " + getTime(currentTime),
+        };
+
+        console.log(newBookmark);
+        currentVideoBookmarks = await fetchBookmarks();
+
+        chrome.storage.sync.set({
+            [currentVideo]: JSON.stringify([...currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
+        });
+    };
 
     function removeShorts(source) {
         shorts =
@@ -75,20 +109,6 @@
             console.log("Attention extension has removed " + reels.length + " reels");
         }
     }
-
-    const addNewBookmarkEventHandler = () => {
-        const currentTime = youtubePlayer.currentTime;
-        const newBookmark = {
-            time: currentTime,
-            desc: "Bookmark at " + currentTime,
-        };
-
-        console.log(newBookmark);
-
-        chrome.storage.sync.set({
-            [currentVideo]: JSON.stringify([...currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
-        });
-    };
 })();
 
 const getTime = (t) => {
