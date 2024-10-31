@@ -1,6 +1,6 @@
 {
     "name": "Attention",
-    "version": "0.2.0",
+    "version": "1.0.0",
     "description": "Multi feature Extention to improve your work",
     "permissions": ["storage", "tabs"],
     "host_permissions": ["https://*.youtube.com/*", "https://*.facebook.com/*"],

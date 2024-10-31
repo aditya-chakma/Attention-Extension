@@ -52,8 +52,6 @@
         const bookmarkBtnExist = document.getElementsByClassName("bookmark-btn")[0];
         currentVideoBookmarks = await fetchBookmarks();
 
-        console.log("yt-watch content");
-
         if (!bookmarkBtnExist) {
             const bookmarkBtn = document.createElement("img");
 
@@ -79,7 +77,6 @@
             desc: "Bookmark at " + getTime(currentTime),
         };
 
-        console.log(newBookmark);
         currentVideoBookmarks = await fetchBookmarks();
 
         chrome.storage.sync.set({
