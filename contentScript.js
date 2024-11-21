@@ -1,4 +1,14 @@
 (() => {
+    const blockedUrls = ["facebook.com"];
+    let currentUrl = window.location.toString();
+
+    blockedUrls.forEach((blockedUrl) => {
+        console.log("Blocked url: " + blockedUrl);
+        if (currentUrl.length > 0 && currentUrl.includes(blockedUrl)) {
+            window.location.href = chrome.runtime.getURL("blocked.html");
+        }
+    });
+
     let youtubeLeftControls, youtubePlayer;
     let currentVideo = "";
     let intervalId = "";
