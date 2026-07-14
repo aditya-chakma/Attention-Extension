@@ -11,43 +11,85 @@
 
     let youtubeLeftControls, youtubePlayer;
     let currentVideo = "";
-    let intervalId = "";
+    let intervalId = null;
     let currentVideoBookmarks = [];
+
+    const waitForElement = (className, timeout = 10000) => {
+        return new Promise((resolve) => {
+            const element = document.getElementsByClassName(className)[0];
+            if (element) {
+                return resolve(element);
+            }
+
+            const observer = new MutationObserver(() => {
+                const el = document.getElementsByClassName(className)[0];
+                if (el) {
+                    resolve(el);
+                    observer.disconnect();
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                resolve(null);
+            }, timeout);
+        });
+    };
 
     chrome.runtime.onMessage.addListener((obj, sender, response) => {
         const { type, source } = obj;
+        let isAsync = false;
+
+        // Clear existing interval to avoid duplicate timer loops (memory leak)
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
 
         if (source === "fb") {
             removeReels();
             intervalId = setInterval(removeReels, 2000);
         } else if (source === "yt-home" || source === "yt-watch") {
             if (source === "yt-watch") {
-                bookMark(obj, response);
+                isAsync = bookMark(obj, response);
             }
 
             removeShorts(source);
             intervalId = setInterval(() => removeShorts(source), 2000);
         }
+
+        return isAsync;
     });
 
     function bookMark(obj, response) {
         const { type, source, value, videoId } = obj;
 
         if (source !== "yt-watch") {
-            return;
+            return false;
         }
 
         if (type === "NEW") {
             currentVideo = videoId;
             newVideoLoaded();
+            return false;
         } else if (type === "PLAY") {
-            youtubePlayer.currentTime = value;
+            if (youtubePlayer) {
+                youtubePlayer.currentTime = value;
+            }
+            return false;
         } else if (type === "DELETE") {
             currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != value);
-            chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) });
-
-            response(currentVideoBookmarks);
+            chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) }, () => {
+                response(currentVideoBookmarks);
+            });
+            return true;
         }
+        return false;
     }
 
     const fetchBookmarks = () => {
@@ -59,28 +101,28 @@
     };
 
     const newVideoLoaded = async () => {
-        const bookmarkBtnExist = document.getElementsByClassName("bookmark-btn")[0];
         currentVideoBookmarks = await fetchBookmarks();
 
-        if (!bookmarkBtnExist) {
+        // Always update references to ensure we point to the active player element on SPA transitions
+        youtubeLeftControls = await waitForElement("ytp-left-controls");
+        youtubePlayer = await waitForElement("video-stream");
+
+        const bookmarkBtnExist = document.getElementsByClassName("bookmark-btn")[0];
+
+        if (youtubeLeftControls && youtubePlayer && !bookmarkBtnExist) {
             const bookmarkBtn = document.createElement("img");
 
             bookmarkBtn.src = chrome.runtime.getURL("assets/bookmark.png");
             bookmarkBtn.className = "ytp-button " + "bookmark-btn";
             bookmarkBtn.title = "Click to bookmark current timestamp";
 
-            youtubeLeftControls = document.getElementsByClassName("ytp-left-controls")[0];
-            youtubePlayer = document.getElementsByClassName("video-stream")[0];
-
             youtubeLeftControls.appendChild(bookmarkBtn);
             bookmarkBtn.addEventListener("click", addNewBookmarkEventHandler);
         }
     };
 
-    // call on page reload
-    //newVideoLoaded();
-
     const addNewBookmarkEventHandler = async () => {
+        if (!youtubePlayer) return;
         const currentTime = youtubePlayer.currentTime;
         const newBookmark = {
             time: currentTime,
@@ -95,7 +137,7 @@
     };
 
     function removeShorts(source) {
-        shorts =
+        const shorts =
             source === "yt-home"
                 ? document.querySelectorAll("ytd-rich-section-renderer")
                 : document.querySelectorAll("ytd-reel-shelf-renderer");
@@ -108,7 +150,7 @@
     }
 
     function removeReels() {
-        reels = document.querySelectorAll('[aria-label="Reels"]');
+        const reels = document.querySelectorAll('[aria-label="Reels"]');
 
         if (reels && reels.length > 0) {
             reels.forEach((el) => el.remove());
@@ -122,5 +164,5 @@ const getTime = (t) => {
     var date = new Date(0);
     date.setSeconds(t);
 
-    return date.toISOString().substr(11, 8);
+    return date.toISOString().slice(11, 19);
 };

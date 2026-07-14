@@ -39,6 +39,7 @@ const viewBookmarks = (currentBookmarks = []) => {
 const onPlay = async (e) => {
     const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
     const activeTab = await getActiveTabURL();
+    if (!activeTab || !activeTab.id) return;
 
     chrome.tabs.sendMessage(activeTab.id, {
         source: "yt-watch",
@@ -49,6 +50,7 @@ const onPlay = async (e) => {
 
 const onDelete = async (e) => {
     const activeTab = await getActiveTabURL();
+    if (!activeTab || !activeTab.id) return;
     const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
 
     const bookmarkElementToDelete = document.getElementById("bookmark-" + bookmarkTime);
@@ -77,6 +79,13 @@ const setBookmarkAttributes = (src, eventListener, controlParent) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     const activeTab = await getActiveTabURL();
+
+    if (!activeTab || !activeTab.url) {
+        const container = document.getElementsByClassName("container")[0];
+        container.innerHTML = '<div class="title">Cannot access current tab information.</div>';
+        return;
+    }
+
     const queryParameters = activeTab.url.split("?")[1];
     const urlParameters = new URLSearchParams(queryParameters);
 
