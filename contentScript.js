@@ -136,6 +136,32 @@
         });
     };
 
+    // Storage keys reserved by the dashboard; plain video ids keep holding
+    // their timestamp bookmark lists as before
+    const VIDEOS_KEY = "attention_bookmarked_videos";
+    const TITLES_KEY = "attention_video_titles";
+
+    const fetchStoredJSON = (key, fallback) => {
+        return new Promise((resolve) => {
+            chrome.storage.sync.get([key], (obj) => {
+                resolve(obj[key] ? JSON.parse(obj[key]) : fallback);
+            });
+        });
+    };
+
+    const getVideoTitle = () => document.title.replace(/ - YouTube$/, "").trim();
+
+    const getChannelName = () => {
+        const link = document.querySelector(
+            "#owner #channel-name a, ytd-video-owner-renderer #channel-name a, ytd-channel-name a"
+        );
+        if (link && link.textContent.trim()) {
+            return link.textContent.trim();
+        }
+        const meta = document.querySelector('span[itemprop="author"] link[itemprop="name"]');
+        return meta ? (meta.getAttribute("content") || "").trim() : "";
+    };
+
     const newVideoLoaded = async () => {
         currentVideoBookmarks = await fetchBookmarks();
 
@@ -155,6 +181,19 @@
             youtubeLeftControls.appendChild(bookmarkBtn);
             bookmarkBtn.addEventListener("click", addNewBookmarkEventHandler);
         }
+
+        const videoBookmarkBtnExist = document.getElementsByClassName("video-bookmark-btn")[0];
+
+        if (youtubeLeftControls && youtubePlayer && !videoBookmarkBtnExist) {
+            const videoBookmarkBtn = document.createElement("img");
+
+            videoBookmarkBtn.src = chrome.runtime.getURL("assets/save.png");
+            videoBookmarkBtn.className = "ytp-button " + "video-bookmark-btn";
+            videoBookmarkBtn.title = "Click to bookmark this video";
+
+            youtubeLeftControls.appendChild(videoBookmarkBtn);
+            videoBookmarkBtn.addEventListener("click", bookmarkVideoEventHandler);
+        }
     };
 
     const addNewBookmarkEventHandler = async () => {
@@ -166,9 +205,29 @@
         };
 
         currentVideoBookmarks = await fetchBookmarks();
+        const titles = await fetchStoredJSON(TITLES_KEY, {});
+        titles[currentVideo] = getVideoTitle();
 
         chrome.storage.sync.set({
             [currentVideo]: JSON.stringify([...currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
+            [TITLES_KEY]: JSON.stringify(titles),
+        });
+    };
+
+    const bookmarkVideoEventHandler = async () => {
+        if (!youtubePlayer) return;
+
+        const videos = await fetchStoredJSON(VIDEOS_KEY, []);
+        const entry = {
+            id: currentVideo,
+            title: getVideoTitle(),
+            channel: getChannelName(),
+            time: youtubePlayer.currentTime,
+            savedAt: Date.now(),
+        };
+
+        chrome.storage.sync.set({
+            [VIDEOS_KEY]: JSON.stringify([...videos.filter((v) => v.id !== currentVideo), entry]),
         });
     };
 

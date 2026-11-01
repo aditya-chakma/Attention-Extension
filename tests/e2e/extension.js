@@ -7,6 +7,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // The extension is the repository root (manifest.json lives there)
 const extensionPath = path.resolve(here, "../..");
 const fixturesDir = path.join(here, "fixtures");
+const ONE_PIXEL_PNG =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 /**
  * Playwright fixtures that launch Chromium with the unpacked extension loaded.
@@ -30,6 +32,10 @@ export const test = base.extend({
         });
         await context.route("https://www.facebook.com/**", (route) =>
             route.fulfill({ contentType: "text/html", body: fs.readFileSync(path.join(fixturesDir, "facebook.html"), "utf8") })
+        );
+        // Dashboard thumbnails: serve a 1x1 PNG instead of hitting i.ytimg.com
+        await context.route("https://i.ytimg.com/**", (route) =>
+            route.fulfill({ contentType: "image/png", body: Buffer.from(ONE_PIXEL_PNG, "base64") })
         );
 
         await use(context);

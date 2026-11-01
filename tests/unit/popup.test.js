@@ -10,7 +10,8 @@ const renderPopup = async (tab) => {
                 <div class="title">Your bookmarks for this video</div>
                 <div class="bookmarks" id="bookmarks"></div>
             </div>
-        </div>`;
+        </div>
+        <button id="open-dashboard" class="icon-btn" aria-label="Open bookmarks dashboard"><svg></svg></button>`;
     chrome.tabs.query.mockResolvedValue(tab ? [tab] : []);
     document.dispatchEvent(new Event("DOMContentLoaded"));
     await flushPromises();
@@ -58,6 +59,24 @@ describe("popup", () => {
         await renderPopup(undefined);
 
         expect(document.querySelector(".container").textContent.trim()).toBe("Cannot access current tab information.");
+    });
+
+    it("the dashboard icon opens the bookmarked videos page in a new tab", async () => {
+        await renderPopup(WATCH_TAB);
+
+        document.getElementById("open-dashboard").click();
+
+        expect(chrome.tabs.create).toHaveBeenCalledWith({
+            url: "chrome-extension://test-extension-id/videos.html",
+        });
+    });
+
+    it("the dashboard button still works when the tab is not a watch page", async () => {
+        await renderPopup({ id: 1, url: "https://www.youtube.com/" });
+
+        document.getElementById("open-dashboard").click();
+
+        expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
     });
 
     it("play sends a PLAY message with the bookmark time to the active tab", async () => {

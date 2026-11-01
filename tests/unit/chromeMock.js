@@ -9,6 +9,7 @@ export function createChromeMock() {
     const storageData = {};
     const messageListeners = [];
     const tabUpdatedListeners = [];
+    const storageChangedListeners = [];
 
     const chrome = {
         runtime: {
@@ -20,6 +21,10 @@ export function createChromeMock() {
         storage: {
             sync: {
                 get: vi.fn((keys, callback) => {
+                    if (keys === null || keys === undefined) {
+                        callback({ ...storageData });
+                        return;
+                    }
                     const keyList = Array.isArray(keys) ? keys : [keys];
                     const result = {};
                     for (const key of keyList) {
@@ -28,9 +33,18 @@ export function createChromeMock() {
                     callback(result);
                 }),
                 set: vi.fn((items, callback) => {
-                    Object.assign(storageData, items);
+                    const changes = {};
+                    for (const [key, value] of Object.entries(items)) {
+                        changes[key] = { oldValue: storageData[key], newValue: value };
+                        storageData[key] = value;
+                    }
                     if (callback) callback();
+                    // Like Chrome, notify every context (including the writer) of the change
+                    for (const fn of storageChangedListeners) fn(changes, "sync");
                 }),
+            },
+            onChanged: {
+                addListener: vi.fn((fn) => storageChangedListeners.push(fn)),
             },
         },
         tabs: {
@@ -39,11 +53,13 @@ export function createChromeMock() {
             },
             sendMessage: vi.fn(() => Promise.resolve()),
             query: vi.fn(() => Promise.resolve([])),
+            create: vi.fn(() => Promise.resolve({})),
         },
 
         __storageData: storageData,
         __messageListeners: messageListeners,
         __tabUpdatedListeners: tabUpdatedListeners,
+        __storageChangedListeners: storageChangedListeners,
 
         /** Clears recorded calls and stored data but keeps registered listeners. */
         __reset() {
@@ -54,6 +70,7 @@ export function createChromeMock() {
                 chrome.storage.sync.set,
                 chrome.tabs.sendMessage,
                 chrome.tabs.query,
+                chrome.tabs.create,
             ]) {
                 fn.mockClear();
             }

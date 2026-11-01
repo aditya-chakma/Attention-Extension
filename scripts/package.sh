@@ -20,6 +20,10 @@ FILES=(
     popup.css
     utils.js
     blocked.html
+    videos.html
+    timestamps.html
+    dashboard.js
+    dashboard.css
     assets
     LICENSE
 )

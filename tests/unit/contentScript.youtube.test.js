@@ -223,6 +223,17 @@ describe("bookmarks on a watch page", () => {
         expect(video.currentTime).toBe(42);
     });
 
+    it("records the video title alongside the timestamp bookmark", async () => {
+        const { controls } = setupPlayer();
+        document.title = "Some Tutorial - YouTube";
+        await loadVideo("vid-title");
+
+        controls.querySelector(".bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData.attention_video_titles)).toEqual({ "vid-title": "Some Tutorial" });
+    });
+
     it("navigating to a watch URL via yt-navigate-finish sets up bookmarks without a background message", async () => {
         const { controls, video } = setupPlayer();
 
@@ -261,5 +272,94 @@ describe("bookmarks on a watch page", () => {
         expect(isAsync).toBe(true);
         expect(response).toHaveBeenCalledWith([{ time: 20, desc: "Bookmark at 00:00:20" }]);
         expect(JSON.parse(chrome.__storageData.vid5)).toEqual([{ time: 20, desc: "Bookmark at 00:00:20" }]);
+    });
+
+    it("also adds a video bookmark button to the player controls", async () => {
+        const { controls } = setupPlayer();
+
+        await loadVideo("vid6");
+
+        const btn = controls.querySelector("img.video-bookmark-btn");
+        expect(btn).not.toBeNull();
+        expect(btn.classList.contains("ytp-button")).toBe(true);
+        expect(btn.title).toBe("Click to bookmark this video");
+        expect(btn.src).toBe("chrome-extension://test-extension-id/assets/save.png");
+        expect(controls.querySelectorAll("img")).toHaveLength(2);
+    });
+
+    it("clicking the video bookmark button stores the video with its title and current time", async () => {
+        const { controls, video } = setupPlayer();
+        document.title = "My Video - YouTube";
+        vi.spyOn(Date, "now").mockReturnValue(1234567890);
+        await loadVideo("vid7");
+        video.currentTime = 90;
+
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)).toEqual([
+            { id: "vid7", title: "My Video", channel: "", time: 90, savedAt: 1234567890 },
+        ]);
+        vi.restoreAllMocks();
+    });
+
+    it("stores the channel name from the video owner block", async () => {
+        const { controls } = setupPlayer();
+        document.body.insertAdjacentHTML(
+            "beforeend",
+            '<div id="owner"><div id="channel-name"><a href="/@bunny">  Blender Foundation </a></div></div>'
+        );
+        await loadVideo("vid-channel");
+
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)[0].channel).toBe("Blender Foundation");
+    });
+
+    it("falls back to the author metadata when the owner block is missing", async () => {
+        const { controls } = setupPlayer();
+        document.body.insertAdjacentHTML(
+            "beforeend",
+            '<span itemprop="author"><link itemprop="name" content="Meta Channel"></span>'
+        );
+        await loadVideo("vid-meta");
+
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)[0].channel).toBe("Meta Channel");
+    });
+
+    it("re-bookmarking the same video replaces its entry instead of duplicating it", async () => {
+        const { controls, video } = setupPlayer();
+        document.title = "My Video - YouTube";
+        await loadVideo("vid8");
+
+        video.currentTime = 10;
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+        video.currentTime = 20;
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+
+        const videos = JSON.parse(chrome.__storageData.attention_bookmarked_videos);
+        expect(videos).toHaveLength(1);
+        expect(videos[0]).toMatchObject({ id: "vid8", time: 20 });
+    });
+
+    it("keeps bookmarks of other videos when bookmarking a new one", async () => {
+        chrome.__storageData.attention_bookmarked_videos = JSON.stringify([
+            { id: "older", title: "Older", time: 1, savedAt: 1 },
+        ]);
+        const { controls, video } = setupPlayer();
+        await loadVideo("vid9");
+        video.currentTime = 30;
+
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+
+        const videos = JSON.parse(chrome.__storageData.attention_bookmarked_videos);
+        expect(videos.map((v) => v.id)).toEqual(["older", "vid9"]);
     });
 });

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Attention — Bookmarked videos</title>
+        <link href="dashboard.css" rel="stylesheet" type="text/css" />
+        <script type="module" src="dashboard.js"></script>
+    </head>
+    <body>
+        <header>
+            <a class="brand" href="videos.html" title="Go to bookmarked videos">
+                <img class="logo" src="assets/ext-icon.png" alt="" />
+                <span>Attention</span>
+            </a>
+        </header>
+
+        <nav class="tabs">
+            <a id="tab-videos" class="tab active" href="videos.html" aria-current="page">Bookmarked videos</a>
+            <a id="tab-timestamps" class="tab" href="timestamps.html">Bookmarked timestamps</a>
+        </nav>
+
+        <main>
+            <section id="content" class="panel" data-page="videos"></section>
+        </main>
+    </body>
+</html>

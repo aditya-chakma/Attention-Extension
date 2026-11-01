@@ -52,3 +52,27 @@
   flex: auto;
   text-align: right;
 }
+
+.popup-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 6px 0;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #314d3e;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background-color: #e6efe9;
+}

@@ -78,6 +78,13 @@ const setBookmarkAttributes = (src, eventListener, controlParent) => {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
+    const dashboardBtn = document.getElementById("open-dashboard");
+    if (dashboardBtn) {
+        dashboardBtn.addEventListener("click", () => {
+            chrome.tabs.create({ url: chrome.runtime.getURL("videos.html") });
+        });
+    }
+
     const activeTab = await getActiveTabURL();
 
     if (!activeTab || !activeTab.url) {
