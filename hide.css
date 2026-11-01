@@ -1,0 +1,6 @@
+/* Pre-hide distracting elements instantly; contentScript.js then removes them from the DOM */
+ytd-rich-section-renderer,
+ytd-reel-shelf-renderer,
+[aria-label="Reels"] {
+    display: none !important;
+}

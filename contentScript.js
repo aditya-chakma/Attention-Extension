@@ -11,8 +11,60 @@
 
     let youtubeLeftControls, youtubePlayer;
     let currentVideo = "";
-    let intervalId = null;
     let currentVideoBookmarks = [];
+
+    // hide.css pre-hides these selectors instantly; the observer below then
+    // deletes the matching nodes from the DOM, scoped to the current page type
+    const REMOVAL_SELECTORS = {
+        "fb": '[aria-label="Reels"]',
+        "yt-home": "ytd-rich-section-renderer",
+        "yt-watch": "ytd-reel-shelf-renderer",
+    };
+
+    let activeSource = null;
+    let sweepScheduled = false;
+    let domObserver = null;
+
+    function sweep() {
+        sweepScheduled = false;
+        if (!activeSource) return;
+
+        const nodes = document.querySelectorAll(REMOVAL_SELECTORS[activeSource]);
+        if (nodes.length > 0) {
+            nodes.forEach((el) => el.remove());
+
+            if (activeSource === "fb") {
+                console.log("Attention extension has removed " + nodes.length + " reels");
+            } else {
+                console.log("Attention extension has removed " + nodes.length + " shorts from " + activeSource);
+            }
+        }
+    }
+
+    function scheduleSweep() {
+        if (sweepScheduled) return;
+        sweepScheduled = true;
+        // Coalesce mutation bursts into one pass per frame; rAF pauses in hidden tabs
+        requestAnimationFrame(sweep);
+    }
+
+    function startRemoval(source) {
+        activeSource = source;
+        sweep();
+
+        if (!domObserver) {
+            domObserver = new MutationObserver(scheduleSweep);
+            domObserver.observe(document.documentElement, { childList: true, subtree: true });
+        }
+    }
+
+    // YouTube is an SPA: react to its own navigation event instead of waiting
+    // for a background message
+    if (window.location.hostname.includes("youtube.com")) {
+        const ytSource = () => (window.location.href.includes("watch") ? "yt-watch" : "yt-home");
+        startRemoval(ytSource());
+        document.addEventListener("yt-navigate-finish", () => startRemoval(ytSource()));
+    }
 
     const waitForElement = (className, timeout = 10000) => {
         return new Promise((resolve) => {
@@ -45,22 +97,14 @@
         const { type, source } = obj;
         let isAsync = false;
 
-        // Clear existing interval to avoid duplicate timer loops (memory leak)
-        if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
-        }
-
         if (source === "fb") {
-            removeReels();
-            intervalId = setInterval(removeReels, 2000);
+            startRemoval("fb");
         } else if (source === "yt-home" || source === "yt-watch") {
             if (source === "yt-watch") {
                 isAsync = bookMark(obj, response);
             }
 
-            removeShorts(source);
-            intervalId = setInterval(() => removeShorts(source), 2000);
+            startRemoval(source);
         }
 
         return isAsync;
@@ -135,29 +179,6 @@
             [currentVideo]: JSON.stringify([...currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
         });
     };
-
-    function removeShorts(source) {
-        const shorts =
-            source === "yt-home"
-                ? document.querySelectorAll("ytd-rich-section-renderer")
-                : document.querySelectorAll("ytd-reel-shelf-renderer");
-
-        if (shorts && shorts.length > 0) {
-            shorts.forEach((el) => el.remove());
-
-            console.log("Attention extension has removed " + shorts.length + " shorts from " + source);
-        }
-    }
-
-    function removeReels() {
-        const reels = document.querySelectorAll('[aria-label="Reels"]');
-
-        if (reels && reels.length > 0) {
-            reels.forEach((el) => el.remove());
-
-            console.log("Attention extension has removed " + reels.length + " reels");
-        }
-    }
 })();
 
 const getTime = (t) => {

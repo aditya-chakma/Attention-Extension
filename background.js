@@ -1,4 +1,10 @@
-chrome.tabs.onUpdated.addListener((tabId, _, tab) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // onUpdated fires several times per navigation (loading, title, favicon...);
+    // only act on URL changes (SPA navigation) and the final load
+    if (!changeInfo.url && changeInfo.status !== "complete") {
+        return;
+    }
+
     var properties = {};
     var allowedUrls = ["youtube.com", "facebook.com"];
     var tabUrl = "none";
@@ -26,7 +32,7 @@ chrome.tabs.onUpdated.addListener((tabId, _, tab) => {
     }
 
     if (allowedUrls.includes(tabUrl)) {
-        //console.log("TAB url: " + tabUrl);
-        chrome.tabs.sendMessage(tabId, properties);
+        // The content script may not be injected yet on first load; ignore that
+        chrome.tabs.sendMessage(tabId, properties).catch(() => {});
     }
 });
