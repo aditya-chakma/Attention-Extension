@@ -58,14 +58,6 @@
         }
     }
 
-    // YouTube is an SPA: react to its own navigation event instead of waiting
-    // for a background message
-    if (window.location.hostname.includes("youtube.com")) {
-        const ytSource = () => (window.location.href.includes("watch") ? "yt-watch" : "yt-home");
-        startRemoval(ytSource());
-        document.addEventListener("yt-navigate-finish", () => startRemoval(ytSource()));
-    }
-
     const waitForElement = (className, timeout = 10000) => {
         return new Promise((resolve) => {
             const element = document.getElementsByClassName(className)[0];
@@ -179,6 +171,26 @@
             [currentVideo]: JSON.stringify([...currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
         });
     };
+
+    // YouTube is an SPA: react to its own navigation event instead of waiting for
+    // a background message (which can race with content script injection on load)
+    const onYouTubeNavigation = () => {
+        const source = window.location.href.includes("watch") ? "yt-watch" : "yt-home";
+        startRemoval(source);
+
+        if (source === "yt-watch") {
+            const videoId = new URLSearchParams(window.location.search).get("v");
+            if (videoId) {
+                currentVideo = videoId;
+                newVideoLoaded();
+            }
+        }
+    };
+
+    if (window.location.hostname.includes("youtube.com")) {
+        onYouTubeNavigation();
+        document.addEventListener("yt-navigate-finish", onYouTubeNavigation);
+    }
 })();
 
 const getTime = (t) => {
