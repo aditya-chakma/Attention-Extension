@@ -11,7 +11,7 @@ const renderPopup = async (tab) => {
                 <div class="bookmarks" id="bookmarks"></div>
             </div>
         </div>
-        <button id="open-dashboard" class="icon-btn" aria-label="Open bookmarks dashboard"><svg></svg></button>`;
+        <button id="open-dashboard" class="icon-btn" aria-label="Open bookmarks dashboard"></button>`;
     chrome.tabs.query.mockResolvedValue(tab ? [tab] : []);
     document.dispatchEvent(new Event("DOMContentLoaded"));
     await flushPromises();
@@ -59,6 +59,16 @@ describe("popup", () => {
         await renderPopup(undefined);
 
         expect(document.querySelector(".container").textContent.trim()).toBe("Cannot access current tab information.");
+    });
+
+    it("draws the dashboard button icon from the central icon registry", async () => {
+        await renderPopup(WATCH_TAB);
+
+        const svg = document.querySelector("#open-dashboard svg");
+        expect(svg).not.toBeNull();
+        expect(svg.outerHTML).toBe(
+            new DOMParser().parseFromString(globalThis.ATTENTION_ICONS.markup.dashboardGrid, "text/html").body.innerHTML
+        );
     });
 
     it("the dashboard icon opens the bookmarked videos page in a new tab", async () => {

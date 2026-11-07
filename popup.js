@@ -1,4 +1,6 @@
 import { getActiveTabURL } from "./utils.js";
+// Publishes the globalThis.ATTENTION_ICONS registry (shared with the content script)
+import "./icons.js";
 
 const addNewBookmark = (bookmarksElement, bookmark) => {
     const bookmarkTitleElement = document.createElement("div");
@@ -80,6 +82,7 @@ const setBookmarkAttributes = (src, eventListener, controlParent) => {
 document.addEventListener("DOMContentLoaded", async () => {
     const dashboardBtn = document.getElementById("open-dashboard");
     if (dashboardBtn) {
+        dashboardBtn.innerHTML = globalThis.ATTENTION_ICONS.markup.dashboardGrid;
         dashboardBtn.addEventListener("click", () => {
             chrome.tabs.create({ url: chrome.runtime.getURL("videos.html") });
         });

@@ -1,6 +1,9 @@
 // Shared by videos.html and timestamps.html. The page decides what to render
 // through the data-page attribute on #content.
 
+// Publishes the globalThis.ATTENTION_ICONS registry (shared with the content script)
+import "./icons.js";
+
 // Reserved storage keys. Every other key in chrome.storage.sync is a YouTube
 // video id holding its timestamp bookmarks.
 const VIDEOS_KEY = "attention_bookmarked_videos";
@@ -52,13 +55,7 @@ const externalLink = (className, href, textContent) => {
 };
 
 // Static SVG markup only (never user data), so innerHTML is safe here
-const TRASH_ICON =
-    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
-    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /></svg>';
-const PLAY_ICON =
-    '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">' +
-    '<path d="M8 5v14l11-7z" /></svg>';
+const { trash: TRASH_ICON, play: PLAY_ICON } = globalThis.ATTENTION_ICONS.markup;
 
 const formatDate = (timestamp) =>
     new Date(timestamp).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });

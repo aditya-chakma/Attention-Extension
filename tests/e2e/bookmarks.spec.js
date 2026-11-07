@@ -7,10 +7,10 @@ test.describe("YouTube timestamp bookmarks", () => {
     }) => {
         await page.goto("https://www.youtube.com/watch?v=e2e-video");
 
-        const button = page.locator(".ytp-left-controls img.bookmark-btn");
+        const button = page.locator(".ytp-left-controls button.bookmark-btn");
         await expect(button).toHaveCount(1);
         await expect(button).toHaveAttribute("title", "Click to bookmark current timestamp");
-        await expect(button).toHaveAttribute("src", /^chrome-extension:\/\/.+\/assets\/bookmark\.png$/);
+        await expect(button.locator("svg path.ytp-svg-fill")).toHaveCount(1);
 
         await page.evaluate(() => (document.querySelector("video.video-stream").currentTime = 65));
         await button.click();
@@ -34,7 +34,7 @@ test.describe("YouTube timestamp bookmarks", () => {
     }) => {
         await page.goto("https://www.youtube.com/watch?v=vid-save");
 
-        const button = page.locator(".ytp-left-controls img.video-bookmark-btn");
+        const button = page.locator(".ytp-left-controls button.video-bookmark-btn");
         await expect(button).toHaveCount(1);
         await expect(button).toHaveAttribute("title", "Click to bookmark this video");
 
@@ -47,6 +47,68 @@ test.describe("YouTube timestamp bookmarks", () => {
                 return data.attention_bookmarked_videos ? JSON.parse(data.attention_bookmarked_videos) : null;
             })
             .toMatchObject([{ id: "vid-save", title: "Big Buck Bunny", channel: "Blender Foundation", time: 90 }]);
+    });
+
+    test("the video bookmark icon turns solid once the video is bookmarked", async ({ page }) => {
+        await page.goto("https://www.youtube.com/watch?v=vid-solid");
+
+        const button = page.locator(".attention-player-controls button.video-bookmark-btn");
+        await expect(button).toHaveAttribute("data-saved", "false");
+        await expect(button.locator("svg")).toHaveAttribute("data-icon", "videoBookmark");
+
+        await button.click();
+
+        await expect(button).toHaveAttribute("data-saved", "true");
+        await expect(button.locator("svg")).toHaveAttribute("data-icon", "videoBookmarked");
+        await expect(button).toHaveAttribute("title", "Video bookmarked. Click to remove the bookmark");
+    });
+
+    test("clicking the solid bookmark removes the video again and shows toasts for both actions", async ({
+        page,
+        serviceWorker,
+    }) => {
+        await page.goto("https://www.youtube.com/watch?v=vid-toggle");
+        const button = page.locator(".attention-player-controls button.video-bookmark-btn");
+        const toast = page.locator(".attention-toast");
+
+        await button.click();
+        await expect(toast).toHaveText("Video bookmarked");
+        await expect(toast).toHaveClass(/attention-toast-visible/);
+        await expect(button).toHaveAttribute("data-saved", "true");
+
+        await button.click();
+        await expect(toast).toHaveText("Video bookmark removed");
+        await expect(button).toHaveAttribute("data-saved", "false");
+        // The toast hides itself after ~2 seconds
+        await expect(toast).not.toHaveClass(/attention-toast-visible/);
+
+        const data = await serviceWorker.evaluate(() => chrome.storage.sync.get("attention_bookmarked_videos"));
+        expect(JSON.parse(data.attention_bookmarked_videos)).toEqual([]);
+    });
+
+    test("saving a timestamp shows a confirmation toast", async ({ page }) => {
+        await page.goto("https://www.youtube.com/watch?v=vid-ts-toast");
+        await page.evaluate(() => (document.querySelector("video.video-stream").currentTime = 65));
+
+        await page.locator(".attention-player-controls button.bookmark-btn").click();
+
+        await expect(page.locator(".attention-toast")).toHaveText("Timestamp 00:01:05 bookmarked");
+    });
+
+    test("in the modern player the buttons sit in a shaded pill aligned with YouTube's controls", async ({ page }) => {
+        await page.goto("https://www.youtube.com/watch?v=vid-pill");
+        const pill = page.locator(".ytp-left-controls .attention-player-controls");
+        await expect(pill.locator("button")).toHaveCount(2);
+
+        // The real player marks itself with these classes; the fixture does not
+        await page.evaluate(() => document.getElementById("player").classList.add("ytp-delhi-modern"));
+
+        await expect(pill).toHaveCSS("height", "48px");
+        await expect(pill).toHaveCSS("margin-top", "12px");
+        await expect(pill).toHaveCSS("border-radius", "28px");
+        await expect(pill).toHaveCSS("background-color", "rgba(0, 0, 0, 0.3)");
+        await expect(pill.locator(".bookmark-btn svg")).toHaveCSS("filter", "drop-shadow(rgba(0, 0, 0, 0.8) 0px 0px 1px)");
+        await expect(pill.locator(".bookmark-btn svg")).toHaveCSS("width", "36px");
     });
 
     test("popup explains when the active tab is not a watch page", async ({ page, extensionId }) => {

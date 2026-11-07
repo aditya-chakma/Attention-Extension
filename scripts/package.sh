@@ -13,8 +13,10 @@ OUT="$OUT_DIR/attention-$VERSION.zip"
 FILES=(
     manifest.json
     background.js
+    icons.js
     contentScript.js
     hide.css
+    player-buttons.css
     popup.html
     popup.js
     popup.css

@@ -92,6 +92,17 @@ describe("bookmarked videos page", () => {
         expect(metas[0]).toMatch(/\d{4}$/);
     });
 
+    it("draws the trash and play icons from the central icon registry", async () => {
+        seedStorage();
+        await renderPage("timestamps");
+
+        const trashSvg = document.querySelector("#content .delete-btn svg");
+        const playSvg = document.querySelector("#content .open-link svg");
+        const parse = (markup) => new DOMParser().parseFromString(markup, "text/html").body.innerHTML;
+        expect(trashSvg.outerHTML).toBe(parse(globalThis.ATTENTION_ICONS.markup.trash));
+        expect(playSvg.outerHTML).toBe(parse(globalThis.ATTENTION_ICONS.markup.play));
+    });
+
     it("uses an icon-only red trash button for delete", async () => {
         seedStorage();
         await renderPage("videos");
