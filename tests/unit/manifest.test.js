@@ -33,10 +33,16 @@ describe("manifest.json", () => {
         expect(contentScript.css).toContain("hide.css");
     });
 
-    it("exposes blocked.html and the bookmark icon to the matched sites", () => {
+    it("loads the icon registry before the content script, along with the player button styles", () => {
+        const [contentScript] = manifest.content_scripts;
+        expect(contentScript.js.indexOf("icons.js")).toBeGreaterThanOrEqual(0);
+        expect(contentScript.js.indexOf("icons.js")).toBeLessThan(contentScript.js.indexOf("contentScript.js"));
+        expect(contentScript.css).toContain("player-buttons.css");
+    });
+
+    it("exposes blocked.html to the matched sites", () => {
         const resources = manifest.web_accessible_resources.flatMap((r) => r.resources);
         expect(resources).toContain("blocked.html");
-        expect(resources).toContain("assets/bookmark.png");
     });
 });
 

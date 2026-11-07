@@ -23,6 +23,7 @@ beforeAll(async () => {
     // Elements present before the script runs must be removed on load
     document.body.append(richSection(), richSection(), reelShelf());
 
+    await import("../../icons.js");
     await import("../../contentScript.js");
     onMessage = chrome.__messageListeners[0];
 
@@ -172,10 +173,10 @@ describe("bookmarks on a watch page", () => {
 
         await loadVideo("vid1");
 
-        const btn = controls.querySelector("img.bookmark-btn");
+        const btn = controls.querySelector("button.bookmark-btn");
         expect(btn).not.toBeNull();
         expect(btn.classList.contains("ytp-button")).toBe(true);
-        expect(btn.src).toBe("chrome-extension://test-extension-id/assets/bookmark.png");
+        expect(btn.querySelector("svg path.ytp-svg-fill")).not.toBeNull();
         expect(chrome.storage.sync.get).toHaveBeenCalledWith(["vid1"], expect.any(Function));
     });
 
@@ -241,7 +242,7 @@ describe("bookmarks on a watch page", () => {
         await flushPromises();
 
         expect(chrome.storage.sync.get).toHaveBeenCalledWith(["nav-video"], expect.any(Function));
-        const btn = controls.querySelector("img.bookmark-btn");
+        const btn = controls.querySelector("button.bookmark-btn");
         expect(btn).not.toBeNull();
 
         video.currentTime = 7;
@@ -279,12 +280,12 @@ describe("bookmarks on a watch page", () => {
 
         await loadVideo("vid6");
 
-        const btn = controls.querySelector("img.video-bookmark-btn");
+        const btn = controls.querySelector("button.video-bookmark-btn");
         expect(btn).not.toBeNull();
         expect(btn.classList.contains("ytp-button")).toBe(true);
         expect(btn.title).toBe("Click to bookmark this video");
-        expect(btn.src).toBe("chrome-extension://test-extension-id/assets/save.png");
-        expect(controls.querySelectorAll("img")).toHaveLength(2);
+        expect(btn.querySelector("svg path.ytp-svg-fill")).not.toBeNull();
+        expect(controls.querySelectorAll("button.ytp-button")).toHaveLength(2);
     });
 
     it("clicking the video bookmark button stores the video with its title and current time", async () => {
@@ -361,5 +362,93 @@ describe("bookmarks on a watch page", () => {
 
         const videos = JSON.parse(chrome.__storageData.attention_bookmarked_videos);
         expect(videos.map((v) => v.id)).toEqual(["older", "vid9"]);
+    });
+
+    const videoButtonIcon = (controls) => controls.querySelector(".video-bookmark-btn svg").dataset.icon;
+
+    it("groups both buttons in one container and draws their icons from icons.js", async () => {
+        const { controls } = setupPlayer();
+
+        await loadVideo("vid-group");
+
+        const container = controls.querySelector(".attention-player-controls");
+        expect(container).not.toBeNull();
+        expect([...container.children].map((b) => b.className)).toEqual([
+            "ytp-button attention-player-btn bookmark-btn",
+            "ytp-button attention-player-btn video-bookmark-btn",
+        ]);
+        const timestampPath = container.querySelector(".bookmark-btn svg path");
+        expect(timestampPath.getAttribute("d")).toBe(ATTENTION_ICONS.paths.timestampBookmark);
+        expect(container.querySelector(".bookmark-btn svg").getAttribute("viewBox")).toBe("-6 -6 36 36");
+    });
+
+    it("shows an outlined bookmark for a video that is not bookmarked", async () => {
+        const { controls } = setupPlayer();
+
+        await loadVideo("vid-unsaved");
+
+        const btn = controls.querySelector(".video-bookmark-btn");
+        expect(videoButtonIcon(controls)).toBe("videoBookmark");
+        expect(btn.querySelector("path").getAttribute("d")).toBe(ATTENTION_ICONS.paths.videoBookmark);
+        expect(btn.dataset.saved).toBe("false");
+    });
+
+    it("shows a solid bookmark when loading a video that is already bookmarked", async () => {
+        chrome.__storageData.attention_bookmarked_videos = JSON.stringify([{ id: "vid-saved", title: "Saved" }]);
+        const { controls } = setupPlayer();
+
+        await loadVideo("vid-saved");
+
+        const btn = controls.querySelector(".video-bookmark-btn");
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+        expect(btn.querySelector("path").getAttribute("d")).toBe(ATTENTION_ICONS.paths.videoBookmarked);
+        expect(btn.dataset.saved).toBe("true");
+        expect(btn.title).toBe("Video bookmarked. Click to update the saved position");
+        expect(btn.getAttribute("aria-label")).toBe(btn.title);
+    });
+
+    it("turns the bookmark solid after clicking it", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-click");
+        expect(videoButtonIcon(controls)).toBe("videoBookmark");
+
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+    });
+
+    it("goes back to outlined when the video is removed elsewhere (e.g. the dashboard)", async () => {
+        chrome.__storageData.attention_bookmarked_videos = JSON.stringify([{ id: "vid-removed" }]);
+        const { controls } = setupPlayer();
+        await loadVideo("vid-removed");
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+
+        chrome.storage.sync.set({ attention_bookmarked_videos: JSON.stringify([]) });
+
+        expect(videoButtonIcon(controls)).toBe("videoBookmark");
+        expect(controls.querySelector(".video-bookmark-btn").title).toBe("Click to bookmark this video");
+    });
+
+    it("re-syncs the icon when navigating to another video, reusing the same buttons", async () => {
+        chrome.__storageData.attention_bookmarked_videos = JSON.stringify([{ id: "vid-a" }]);
+        const { controls } = setupPlayer();
+
+        await loadVideo("vid-a");
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+
+        await loadVideo("vid-b");
+        expect(videoButtonIcon(controls)).toBe("videoBookmark");
+        expect(controls.querySelectorAll(".attention-player-controls")).toHaveLength(1);
+    });
+
+    it("ignores storage changes to other keys", async () => {
+        chrome.__storageData.attention_bookmarked_videos = JSON.stringify([{ id: "vid-other" }]);
+        const { controls } = setupPlayer();
+        await loadVideo("vid-other");
+
+        chrome.storage.sync.set({ "vid-other": JSON.stringify([]) });
+
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
     });
 });

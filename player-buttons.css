@@ -1,0 +1,100 @@
+/*
+ * Bookmark buttons injected into YouTube's player controls.
+ * Values mirror YouTube's own player stylesheet (www-player.css) so the
+ * buttons line up with, and look like, the native controls.
+ */
+
+/* Both buttons live in one container, like YouTube's prev/next pair */
+.attention-player-controls {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    vertical-align: top;
+    height: 100%;
+}
+
+/* Center the icon in the button instead of letting it sit on the text
+   baseline (.ytp-chrome-controls sets line-height: 48px) */
+.ytp-chrome-bottom .attention-player-controls .ytp-button.attention-player-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ytp-chrome-bottom .attention-player-controls .ytp-button.attention-player-btn svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Keeps the white icons readable over bright video frames */
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+}
+
+/* Modern player: controls sit in frosted "pills" vertically centered in the
+   control bar. Give our buttons the same pill so they line up and stay visible. */
+.ytp-delhi-modern .attention-player-controls {
+    height: var(--yt-delhi-pill-height, 48px);
+    margin: var(--yt-delhi-pill-top-height, 12px) 0 0 8px;
+    padding: 0 4px;
+    border-radius: 28px;
+    -webkit-backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override, blur(16px));
+    backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override, blur(16px));
+    background: var(--yt-sys-color-baseline--overlay-background-medium-light, rgba(0, 0, 0, 0.3));
+}
+
+.ytp-delhi-modern .ytp-chrome-bottom .attention-player-controls .ytp-button.attention-player-btn {
+    position: relative;
+    width: var(--yt-delhi-pill-height, 48px);
+    height: 100%;
+    padding: 0;
+}
+
+/* 36px box with a 36-unit viewBox = a 24px icon, the size of the native icons.
+   Overrides YouTube's svg padding, which assumes a bare 24px svg. */
+.ytp-delhi-modern .ytp-chrome-bottom .attention-player-controls .ytp-button.attention-player-btn svg {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+}
+
+/* Hover/press highlight, same as the native pill buttons */
+.ytp-delhi-modern .attention-player-controls .attention-player-btn::before {
+    content: "";
+    position: absolute;
+    inset: 4px 0;
+    border-radius: 40px;
+    background-color: transparent;
+    pointer-events: none;
+    transition: background-color 0.2s cubic-bezier(0.05, 0, 0, 1);
+}
+
+.ytp-delhi-modern .attention-player-controls .attention-player-btn:hover::before {
+    background-color: var(--yt-sys-color-baseline--overlay-button-secondary, rgba(255, 255, 255, 0.1));
+}
+
+.ytp-delhi-modern .attention-player-controls .attention-player-btn:active::before {
+    background-color: var(--yt-sys-color-baseline--overlay-tonal-hover, rgba(255, 255, 255, 0.2));
+}
+
+/* Big (fullscreen/theater) mode uses taller pills in a taller bar */
+.ytp-delhi-modern.ytp-big-mode:not(.ytp-xsmall-width-mode) .attention-player-controls {
+    height: var(--yt-delhi-big-mode-pill-height, 56px);
+    margin-top: calc(
+        (var(--yt-delhi-big-mode-bottom-controls-height, 96px) - var(--yt-delhi-big-mode-pill-height, 56px)) / 2
+    );
+}
+
+.ytp-delhi-modern.ytp-big-mode:not(.ytp-xsmall-width-mode)
+    .ytp-chrome-bottom
+    .attention-player-controls
+    .ytp-button.attention-player-btn {
+    width: var(--yt-delhi-big-mode-pill-height, 56px);
+}
+
+/* Very narrow players use a shorter 64px bar with 40px pills */
+.ytp-delhi-modern.ytp-xsmall-width-mode .attention-player-controls {
+    height: 40px;
+}
+
+.ytp-delhi-modern.ytp-xsmall-width-mode .ytp-chrome-bottom .attention-player-controls .ytp-button.attention-player-btn {
+    width: 40px;
+}

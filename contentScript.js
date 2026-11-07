@@ -169,31 +169,50 @@
         youtubeLeftControls = await waitForElement("ytp-left-controls");
         youtubePlayer = await waitForElement("video-stream");
 
-        const bookmarkBtnExist = document.getElementsByClassName("bookmark-btn")[0];
+        if (!youtubeLeftControls || !youtubePlayer) return;
 
-        if (youtubeLeftControls && youtubePlayer && !bookmarkBtnExist) {
-            const bookmarkBtn = document.createElement("img");
-
-            bookmarkBtn.src = chrome.runtime.getURL("assets/bookmark.png");
-            bookmarkBtn.className = "ytp-button " + "bookmark-btn";
-            bookmarkBtn.title = "Click to bookmark current timestamp";
-
-            youtubeLeftControls.appendChild(bookmarkBtn);
-            bookmarkBtn.addEventListener("click", addNewBookmarkEventHandler);
+        if (!document.getElementsByClassName("attention-player-controls")[0]) {
+            const container = document.createElement("div");
+            container.className = "attention-player-controls";
+            container.append(
+                createPlayerButton("bookmark-btn", TIMESTAMP_BUTTON_LABEL, "timestampBookmark", addNewBookmarkEventHandler),
+                createPlayerButton("video-bookmark-btn", VIDEO_BUTTON_LABEL, "videoBookmark", bookmarkVideoEventHandler)
+            );
+            youtubeLeftControls.appendChild(container);
         }
 
-        const videoBookmarkBtnExist = document.getElementsByClassName("video-bookmark-btn")[0];
+        // The buttons persist across SPA navigations, so re-sync for every video
+        renderVideoBookmarkState(await fetchStoredJSON(VIDEOS_KEY, []));
+    };
 
-        if (youtubeLeftControls && youtubePlayer && !videoBookmarkBtnExist) {
-            const videoBookmarkBtn = document.createElement("img");
+    const TIMESTAMP_BUTTON_LABEL = "Click to bookmark current timestamp";
+    const VIDEO_BUTTON_LABEL = "Click to bookmark this video";
+    const VIDEO_BUTTON_SAVED_LABEL = "Video bookmarked. Click to update the saved position";
 
-            videoBookmarkBtn.src = chrome.runtime.getURL("assets/save.png");
-            videoBookmarkBtn.className = "ytp-button " + "video-bookmark-btn";
-            videoBookmarkBtn.title = "Click to bookmark this video";
+    // <button class="ytp-button"> mirrors YouTube's own player buttons so it picks
+    // up their reset, cursor and hover opacity; player-buttons.css does the rest.
+    // Icons come from icons.js (globalThis.ATTENTION_ICONS).
+    const createPlayerButton = (className, label, iconName, onClick) => {
+        const button = document.createElement("button");
+        button.className = "ytp-button attention-player-btn " + className;
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.appendChild(ATTENTION_ICONS.createIcon(iconName));
+        button.addEventListener("click", onClick);
+        return button;
+    };
 
-            youtubeLeftControls.appendChild(videoBookmarkBtn);
-            videoBookmarkBtn.addEventListener("click", bookmarkVideoEventHandler);
-        }
+    // Solid bookmark icon when the current video is in the bookmarked list
+    const renderVideoBookmarkState = (videos) => {
+        const button = document.querySelector(".attention-player-controls .video-bookmark-btn");
+        if (!button) return;
+
+        const saved = videos.some((v) => v.id === currentVideo);
+        const label = saved ? VIDEO_BUTTON_SAVED_LABEL : VIDEO_BUTTON_LABEL;
+        ATTENTION_ICONS.setIcon(button.querySelector("svg"), saved ? "videoBookmarked" : "videoBookmark");
+        button.dataset.saved = String(saved);
+        button.title = label;
+        button.setAttribute("aria-label", label);
     };
 
     const addNewBookmarkEventHandler = async () => {
@@ -249,6 +268,14 @@
     if (window.location.hostname.includes("youtube.com")) {
         onYouTubeNavigation();
         document.addEventListener("yt-navigate-finish", onYouTubeNavigation);
+
+        // Keeps the video bookmark icon in sync with saves from this button and
+        // removals from the dashboard (possibly in another tab)
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== "sync" || !(VIDEOS_KEY in changes)) return;
+            const { newValue } = changes[VIDEOS_KEY];
+            renderVideoBookmarkState(newValue ? JSON.parse(newValue) : []);
+        });
     }
 })();
 
