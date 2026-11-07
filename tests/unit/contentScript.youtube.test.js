@@ -24,6 +24,7 @@ beforeAll(async () => {
     document.body.append(richSection(), richSection(), reelShelf());
 
     await import("../../icons.js");
+    await import("../../bookmarkStore.js");
     await import("../../contentScript.js");
     onMessage = chrome.__messageListeners[0];
 
@@ -214,6 +215,62 @@ describe("bookmarks on a watch page", () => {
         expect(JSON.parse(chrome.__storageData.vid3).map((b) => b.time)).toEqual([30, 120]);
     });
 
+    it("does not save the same timestamp twice (e.g. clicking on a paused video)", async () => {
+        const { controls, video } = setupPlayer();
+        await loadVideo("vid-dup");
+        video.currentTime = 65;
+
+        controls.querySelector(".bookmark-btn").click();
+        await flushPromises();
+        controls.querySelector(".bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData["vid-dup"])).toEqual([{ time: 65, desc: "Bookmark at 00:01:05" }]);
+        expect(document.querySelector(".attention-toast").textContent).toBe("Already bookmarked at 00:01:05");
+    });
+
+    it("treats times within the same displayed second as the same timestamp", async () => {
+        const { controls, video } = setupPlayer();
+        await loadVideo("vid-dup-frac");
+
+        video.currentTime = 65.2;
+        controls.querySelector(".bookmark-btn").click();
+        await flushPromises();
+        video.currentTime = 65.8;
+        controls.querySelector(".bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData["vid-dup-frac"]).map((b) => b.time)).toEqual([65.2]);
+    });
+
+    it("rapid clicks before storage responds still save only one bookmark", async () => {
+        const { controls, video } = setupPlayer();
+        await loadVideo("vid-dup-fast");
+        video.currentTime = 30;
+
+        const btn = controls.querySelector(".bookmark-btn");
+        btn.click();
+        btn.click();
+        btn.click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData["vid-dup-fast"])).toHaveLength(1);
+    });
+
+    it("the same time on a different video is not a duplicate", async () => {
+        chrome.__storageData["other-vid"] = JSON.stringify([{ time: 65, desc: "Bookmark at 00:01:05" }]);
+        const { controls, video } = setupPlayer();
+        await loadVideo("vid-dup-other");
+        video.currentTime = 65;
+
+        controls.querySelector(".bookmark-btn").click();
+        await flushPromises();
+
+        expect(JSON.parse(chrome.__storageData["vid-dup-other"])).toHaveLength(1);
+        expect(document.querySelector(".attention-toast").textContent).toBe("Bookmarked at 00:01:05");
+    });
+
     it("PLAY seeks the video to the requested time", async () => {
         const { video } = setupPlayer();
         await loadVideo("vid4");
@@ -283,24 +340,81 @@ describe("bookmarks on a watch page", () => {
         const btn = controls.querySelector("button.video-bookmark-btn");
         expect(btn).not.toBeNull();
         expect(btn.classList.contains("ytp-button")).toBe(true);
-        expect(btn.title).toBe("Click to bookmark this video");
+        expect(btn.title).toBe("Save this video to a playlist");
         expect(btn.querySelector("svg path.ytp-svg-fill")).not.toBeNull();
         expect(controls.querySelectorAll("button.ytp-button")).toHaveLength(2);
     });
 
-    it("clicking the video bookmark button stores the video with its title and current time", async () => {
+    // ---- Save to playlist panel
+
+    const panel = () => document.querySelector(".attention-save-dialog");
+    const checkbox = (playlistId) => panel().querySelector(`input[data-playlist-id="${playlistId}"]`);
+    const storedVideos = () => JSON.parse(chrome.__storageData.attention_bookmarked_videos || "[]");
+    const storedPlaylists = () => JSON.parse(chrome.__storageData.attention_playlists);
+    const playlistById = (id) => storedPlaylists().find((p) => p.id === id);
+    const toastText = () => document.querySelector(".attention-toast")?.textContent;
+
+    const openPanel = async (controls) => {
+        controls.querySelector(".video-bookmark-btn").click();
+        await flushPromises();
+        return panel();
+    };
+    const toggle = async (playlistId) => {
+        checkbox(playlistId).click();
+        await flushPromises();
+    };
+    const typeNewPlaylist = async (name) => {
+        panel().querySelector(".attention-new-playlist-btn").click();
+        await flushPromises();
+        const input = panel().querySelector(".attention-new-playlist-form input");
+        input.value = name;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return input;
+    };
+    const submitNewPlaylist = async () => {
+        panel().querySelector(".attention-new-playlist-form").requestSubmit();
+        await flushPromises();
+        await flushPromises();
+    };
+
+    it("clicking the video bookmark button opens a Save to panel listing the default playlists", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-panel");
+
+        const dialog = await openPanel(controls);
+
+        expect(dialog).not.toBeNull();
+        expect(dialog.getAttribute("role")).toBe("dialog");
+        expect(dialog.querySelector(".attention-save-title").textContent).toBe("Save to…");
+        expect([...dialog.querySelectorAll(".attention-playlist-name")].map((n) => n.textContent)).toEqual([
+            "Favorites",
+            "Watch Later",
+        ]);
+        expect(checkbox("favorites").checked).toBe(false);
+        expect(checkbox("watch-later").checked).toBe(false);
+        expect(controls.querySelector(".video-bookmark-btn").getAttribute("aria-expanded")).toBe("true");
+        // Opening alone saves nothing
+        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        // Nothing to remove yet
+        expect(dialog.querySelector(".attention-remove-bookmark")).toBeNull();
+    });
+
+    it("checking a playlist bookmarks the video with its title and current time", async () => {
         const { controls, video } = setupPlayer();
         document.title = "My Video - YouTube";
         vi.spyOn(Date, "now").mockReturnValue(1234567890);
         await loadVideo("vid7");
         video.currentTime = 90;
+        await openPanel(controls);
 
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
+        await toggle("favorites");
 
-        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)).toEqual([
-            { id: "vid7", title: "My Video", channel: "", time: 90, savedAt: 1234567890 },
-        ]);
+        expect(storedVideos()).toEqual([{ id: "vid7", title: "My Video", channel: "", time: 90, savedAt: 1234567890 }]);
+        expect(playlistById("favorites").videoIds).toEqual(["vid7"]);
+        expect(playlistById("watch-later").videoIds).toEqual([]);
+        expect(checkbox("favorites").checked).toBe(true);
+        expect(toastText()).toBe("Saved to Favorites");
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
         vi.restoreAllMocks();
     });
 
@@ -311,11 +425,11 @@ describe("bookmarks on a watch page", () => {
             '<div id="owner"><div id="channel-name"><a href="/@bunny">  Blender Foundation </a></div></div>'
         );
         await loadVideo("vid-channel");
+        await openPanel(controls);
 
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
+        await toggle("favorites");
 
-        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)[0].channel).toBe("Blender Foundation");
+        expect(storedVideos()[0].channel).toBe("Blender Foundation");
     });
 
     it("falls back to the author metadata when the owner block is missing", async () => {
@@ -325,57 +439,235 @@ describe("bookmarks on a watch page", () => {
             '<span itemprop="author"><link itemprop="name" content="Meta Channel"></span>'
         );
         await loadVideo("vid-meta");
+        await openPanel(controls);
 
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
+        await toggle("favorites");
 
-        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)[0].channel).toBe("Meta Channel");
+        expect(storedVideos()[0].channel).toBe("Meta Channel");
     });
 
-    it("clicking the bookmark on an already-bookmarked video removes it (toggle)", async () => {
-        const { controls, video } = setupPlayer();
-        document.title = "My Video - YouTube";
-        await loadVideo("vid8");
-
-        video.currentTime = 10;
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
-        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)).toHaveLength(1);
-
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
-
-        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)).toEqual([]);
-        expect(videoButtonIcon(controls)).toBe("videoBookmark");
-    });
-
-    it("removing a bookmark keeps the bookmarks of other videos", async () => {
-        chrome.__storageData.attention_bookmarked_videos = JSON.stringify([
-            { id: "other", title: "Other" },
-            { id: "vid-toggle", title: "Mine" },
-        ]);
+    it("a video can be saved to several playlists and is stored once", async () => {
         const { controls } = setupPlayer();
-        await loadVideo("vid-toggle");
+        await loadVideo("vid-multi");
+        await openPanel(controls);
 
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
+        await toggle("favorites");
+        await toggle("watch-later");
 
-        expect(JSON.parse(chrome.__storageData.attention_bookmarked_videos)).toEqual([{ id: "other", title: "Other" }]);
+        expect(storedVideos().map((v) => v.id)).toEqual(["vid-multi"]);
+        expect(playlistById("favorites").videoIds).toEqual(["vid-multi"]);
+        expect(playlistById("watch-later").videoIds).toEqual(["vid-multi"]);
+        expect(checkbox("favorites").checked).toBe(true);
+        expect(checkbox("watch-later").checked).toBe(true);
+    });
+
+    it("unchecking keeps the bookmark while the video is in another playlist, and removes it with the last one", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-uncheck");
+        await openPanel(controls);
+        await toggle("favorites");
+        await toggle("watch-later");
+
+        await toggle("favorites");
+        expect(storedVideos().map((v) => v.id)).toEqual(["vid-uncheck"]);
+        expect(toastText()).toBe("Removed from Favorites");
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+
+        await toggle("watch-later");
+        expect(storedVideos()).toEqual([]);
+        expect(toastText()).toBe("Removed from Watch Later. Bookmark removed");
+        expect(videoButtonIcon(controls)).toBe("videoBookmark");
     });
 
     it("keeps bookmarks of other videos when bookmarking a new one", async () => {
         chrome.__storageData.attention_bookmarked_videos = JSON.stringify([
             { id: "older", title: "Older", time: 1, savedAt: 1 },
         ]);
-        const { controls, video } = setupPlayer();
+        const { controls } = setupPlayer();
         await loadVideo("vid9");
-        video.currentTime = 30;
+        await openPanel(controls);
+
+        await toggle("watch-later");
+
+        expect(storedVideos().map((v) => v.id)).toEqual(["older", "vid9"]);
+    });
+
+    it("creates a new playlist from the panel and saves the video to it", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-new-pl");
+        await openPanel(controls);
+
+        const input = await typeNewPlaylist("  Study   notes ");
+        expect(document.activeElement).toBe(input);
+        await submitNewPlaylist();
+
+        const created = storedPlaylists().find((p) => p.name === "Study notes");
+        expect(created).toBeDefined();
+        expect(created.videoIds).toEqual(["vid-new-pl"]);
+        expect(storedVideos().map((v) => v.id)).toEqual(["vid-new-pl"]);
+        expect(toastText()).toBe("Saved to Study notes");
+        // Back to the list, with the new playlist checked
+        expect(panel().querySelector(".attention-new-playlist-form")).toBeNull();
+        expect(checkbox(created.id).checked).toBe(true);
+    });
+
+    it("Create is disabled until a name is typed", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-empty-name");
+        await openPanel(controls);
+
+        await typeNewPlaylist("   ");
+
+        expect(panel().querySelector(".attention-new-playlist-form button[type=submit]").disabled).toBe(true);
+    });
+
+    it("rejects a duplicate playlist name with an inline error and creates nothing", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-dup-name");
+        await openPanel(controls);
+
+        await typeNewPlaylist("favorites");
+        await submitNewPlaylist();
+
+        expect(panel().querySelector(".attention-form-error").textContent).toBe('A playlist named "favorites" already exists');
+        // The form stays open with what was typed
+        expect(panel().querySelector(".attention-new-playlist-form input").value).toBe("favorites");
+        // A rejected name writes nothing at all
+        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+    });
+
+    it("Cancel closes the new playlist form without saving", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-cancel");
+        await openPanel(controls);
+        await typeNewPlaylist("Later");
+
+        panel().querySelector(".attention-new-playlist-form button[type=button]").click();
+        await flushPromises();
+
+        expect(panel().querySelector(".attention-new-playlist-form")).toBeNull();
+        expect(chrome.__storageData.attention_playlists).toBeUndefined();
+    });
+
+    it("Remove bookmark takes the video out of every playlist and closes the panel", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-remove-all");
+        await openPanel(controls);
+        await toggle("favorites");
+        await toggle("watch-later");
+
+        panel().querySelector(".attention-remove-bookmark").click();
+        await flushPromises();
+
+        expect(storedVideos()).toEqual([]);
+        expect(storedPlaylists().every((p) => p.videoIds.length === 0)).toBe(true);
+        expect(panel()).toBeNull();
+        expect(toastText()).toBe("Video bookmark removed");
+        expect(videoButtonIcon(controls)).toBe("videoBookmark");
+    });
+
+    it("clicking the bookmark button again closes the panel", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-close-btn");
+        await openPanel(controls);
 
         controls.querySelector(".video-bookmark-btn").click();
         await flushPromises();
 
-        const videos = JSON.parse(chrome.__storageData.attention_bookmarked_videos);
-        expect(videos.map((v) => v.id)).toEqual(["older", "vid9"]);
+        expect(panel()).toBeNull();
+        expect(controls.querySelector(".video-bookmark-btn").getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("the close button, Escape and clicking outside all close the panel", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-close");
+
+        await openPanel(controls);
+        panel().querySelector(".attention-dialog-close").click();
+        expect(panel()).toBeNull();
+
+        await openPanel(controls);
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(panel()).toBeNull();
+
+        await openPanel(controls);
+        panel().dispatchEvent(new Event("pointerdown", { bubbles: true }));
+        expect(panel()).not.toBeNull(); // clicks inside keep it open
+        document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+        expect(panel()).toBeNull();
+    });
+
+    it("Escape in the new playlist form only closes the form", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-esc-form");
+        await openPanel(controls);
+        const input = await typeNewPlaylist("Draft");
+
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await flushPromises();
+
+        expect(panel()).not.toBeNull();
+        expect(panel().querySelector(".attention-new-playlist-form")).toBeNull();
+    });
+
+    it("keys and clicks inside the panel do not reach YouTube's player handlers", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-isolate");
+        await openPanel(controls);
+        const pageKeydown = vi.fn();
+        const pageClick = vi.fn();
+        document.addEventListener("keydown", pageKeydown);
+        document.addEventListener("click", pageClick);
+
+        const input = await typeNewPlaylist("k");
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true }));
+        panel().querySelector(".attention-save-title").click();
+
+        expect(pageKeydown).not.toHaveBeenCalled();
+        expect(pageClick).not.toHaveBeenCalled();
+        document.removeEventListener("keydown", pageKeydown);
+        document.removeEventListener("click", pageClick);
+    });
+
+    it("an open panel updates when playlists change elsewhere (e.g. renamed on the dashboard)", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-live");
+        await openPanel(controls);
+
+        await ATTENTION_STORE.renamePlaylist("watch-later", "Queue");
+        await flushPromises();
+
+        expect([...panel().querySelectorAll(".attention-playlist-name")].map((n) => n.textContent)).toEqual([
+            "Favorites",
+            "Queue",
+        ]);
+    });
+
+    it("marks the player while the panel is open so the toast moves out from behind it", async () => {
+        const { controls } = setupPlayer();
+        const player = document.createElement("div");
+        player.className = "html5-video-player";
+        player.append(controls, document.querySelector("video.video-stream"));
+        document.body.appendChild(player);
+        await loadVideo("vid-toast-pos");
+
+        await openPanel(controls);
+        expect(panel().parentElement).toBe(player);
+        expect(player.classList.contains("attention-panel-open")).toBe(true);
+
+        panel().querySelector(".attention-dialog-close").click();
+        expect(player.classList.contains("attention-panel-open")).toBe(false);
+    });
+
+    it("navigating to another video closes the panel", async () => {
+        const { controls } = setupPlayer();
+        await loadVideo("vid-nav-1");
+        await openPanel(controls);
+
+        goTo("/watch?v=vid-nav-2");
+        await flushPromises();
+
+        expect(panel()).toBeNull();
     });
 
     const videoButtonIcon = (controls) => controls.querySelector(".video-bookmark-btn svg").dataset.icon;
@@ -417,19 +709,8 @@ describe("bookmarks on a watch page", () => {
         expect(videoButtonIcon(controls)).toBe("videoBookmarked");
         expect(btn.querySelector("path").getAttribute("d")).toBe(ATTENTION_ICONS.paths.videoBookmarked);
         expect(btn.dataset.saved).toBe("true");
-        expect(btn.title).toBe("Video bookmarked. Click to remove the bookmark");
+        expect(btn.title).toBe("Saved. Click to change playlists");
         expect(btn.getAttribute("aria-label")).toBe(btn.title);
-    });
-
-    it("turns the bookmark solid after clicking it", async () => {
-        const { controls } = setupPlayer();
-        await loadVideo("vid-click");
-        expect(videoButtonIcon(controls)).toBe("videoBookmark");
-
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
-
-        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
     });
 
     it("goes back to outlined when the video is removed elsewhere (e.g. the dashboard)", async () => {
@@ -441,7 +722,7 @@ describe("bookmarks on a watch page", () => {
         chrome.storage.sync.set({ attention_bookmarked_videos: JSON.stringify([]) });
 
         expect(videoButtonIcon(controls)).toBe("videoBookmark");
-        expect(controls.querySelector(".video-bookmark-btn").title).toBe("Click to bookmark this video");
+        expect(controls.querySelector(".video-bookmark-btn").title).toBe("Save this video to a playlist");
     });
 
     it("re-syncs the icon when navigating to another video, reusing the same buttons", async () => {
@@ -467,36 +748,36 @@ describe("bookmarks on a watch page", () => {
         const toast = document.querySelector(".attention-toast");
         expect(toast).not.toBeNull();
         expect(toast.classList.contains("attention-toast-visible")).toBe(true);
-        expect(toast.textContent).toBe("Timestamp 00:01:05 bookmarked");
+        expect(toast.textContent).toBe("Bookmarked at 00:01:05");
         expect(toast.getAttribute("role")).toBe("status");
     });
 
-    it("shows toasts for bookmarking a video and for removing the bookmark", async () => {
+    it("reuses one toast element instead of stacking them", async () => {
         const { controls } = setupPlayer();
         await loadVideo("vid-toast-vid");
+        await openPanel(controls);
 
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
-        expect(document.querySelector(".attention-toast").textContent).toBe("Video bookmarked");
+        await toggle("favorites");
+        await toggle("favorites");
 
-        controls.querySelector(".video-bookmark-btn").click();
-        await flushPromises();
         const toasts = document.querySelectorAll(".attention-toast");
-        expect(toasts).toHaveLength(1); // reused, not stacked
-        expect(toasts[0].textContent).toBe("Video bookmark removed");
+        expect(toasts).toHaveLength(1);
+        expect(toasts[0].textContent).toBe("Removed from Favorites. Bookmark removed");
     });
 
     it("hides the toast again after a couple of seconds", async () => {
         const { controls } = setupPlayer();
         await loadVideo("vid-toast-hide");
 
+        await openPanel(controls);
+
         vi.useFakeTimers();
         try {
-            controls.querySelector(".video-bookmark-btn").click();
+            checkbox("favorites").click();
             await vi.runAllTimersAsync();
 
             const toast = document.querySelector(".attention-toast");
-            expect(toast.textContent).toBe("Video bookmarked");
+            expect(toast.textContent).toBe("Saved to Favorites");
             expect(toast.classList.contains("attention-toast-visible")).toBe(false);
         } finally {
             vi.useRealTimers();

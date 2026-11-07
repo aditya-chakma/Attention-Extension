@@ -149,6 +149,60 @@ test.describe("Bookmarks dashboard", () => {
         expect(stored.map((v) => v.id)).toEqual(["vidA"]);
     });
 
+    test("videos and playlists sit side by side; a playlist can be created, opened, renamed and deleted", async ({
+        page,
+        serviceWorker,
+        extensionId,
+    }) => {
+        await serviceWorker.evaluate(
+            (data) => chrome.storage.sync.set(data),
+            {
+                ...seedData,
+                attention_playlists: JSON.stringify([
+                    { id: "favorites", name: "Favorites", videoIds: ["vidA"] },
+                    { id: "watch-later", name: "Watch Later", videoIds: ["vidA", "vidB"] },
+                ]),
+            }
+        );
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto(pageUrl(extensionId, "videos.html"));
+
+        // Two columns: videos left, playlists right
+        const main = await page.locator("#content .split-main").boundingBox();
+        const side = await page.locator("#content .split-side").boundingBox();
+        expect(side.x).toBeGreaterThan(main.x + main.width - 1);
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later"]);
+        await expect(page.locator("#content .segment")).toHaveText(["Recent", "All (2)"]);
+
+        // Create
+        await page.getByRole("button", { name: "New playlist" }).click();
+        await page.getByLabel("Playlist name").fill("Lectures");
+        await page.getByLabel("Playlist name").press("Enter");
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later", "Lectures"]);
+
+        // Rename
+        await page.getByRole("button", { name: "Rename Watch Later" }).click();
+        await page.getByLabel("Playlist name").fill("Queue");
+        await page.getByRole("button", { name: "Save" }).click();
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Queue", "Lectures"]);
+
+        // Open a playlist page
+        await page.locator("#content a.playlist-name", { hasText: "Queue" }).click();
+        await expect(page).toHaveURL(pageUrl(extensionId, "playlist.html?id=watch-later"));
+        await expect(page.locator("#content .playlist-title")).toHaveText("Queue");
+        await expect(page.locator("#content a.card-title")).toHaveText(["Second video", "First video"]);
+
+        // Delete it from its page: vidB is only in this playlist, so it goes too
+        page.once("dialog", (dialog) => {
+            expect(dialog.message()).toContain("1 video that is not in any other playlist");
+            dialog.accept();
+        });
+        await page.getByRole("button", { name: "Delete Queue" }).click();
+        await expect(page).toHaveURL(pageUrl(extensionId, "videos.html"));
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Lectures"]);
+        await expect(page.locator("#content a.card-title")).toHaveText(["First video"]);
+    });
+
     test("shows empty states when nothing is bookmarked", async ({ page, extensionId }) => {
         await page.goto(pageUrl(extensionId, "videos.html"));
         await expect(page.locator("#content .empty")).toContainText("No bookmarked videos yet");

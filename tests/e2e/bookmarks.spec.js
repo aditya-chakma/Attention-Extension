@@ -28,71 +28,109 @@ test.describe("YouTube timestamp bookmarks", () => {
             ]);
     });
 
-    test("the video bookmark button stores the video with its title and current time", async ({
+    const storage = (serviceWorker, key) =>
+        serviceWorker.evaluate(async (k) => {
+            const data = await chrome.storage.sync.get(k);
+            return data[k] ? JSON.parse(data[k]) : null;
+        }, key);
+
+    test("the video bookmark button opens a Save to panel and checking a playlist saves the video", async ({
         page,
         serviceWorker,
     }) => {
         await page.goto("https://www.youtube.com/watch?v=vid-save");
-
         const button = page.locator(".ytp-left-controls button.video-bookmark-btn");
-        await expect(button).toHaveCount(1);
-        await expect(button).toHaveAttribute("title", "Click to bookmark this video");
+        await expect(button).toHaveAttribute("title", "Save this video to a playlist");
+        await expect(button).toHaveAttribute("data-saved", "false");
 
         await page.evaluate(() => (document.querySelector("video.video-stream").currentTime = 90));
         await button.click();
 
-        await expect
-            .poll(async () => {
-                const data = await serviceWorker.evaluate(() => chrome.storage.sync.get("attention_bookmarked_videos"));
-                return data.attention_bookmarked_videos ? JSON.parse(data.attention_bookmarked_videos) : null;
-            })
-            .toMatchObject([{ id: "vid-save", title: "Big Buck Bunny", channel: "Blender Foundation", time: 90 }]);
-    });
+        const dialog = page.getByRole("dialog", { name: "Save to playlist" });
+        await expect(dialog).toBeVisible();
+        await expect(dialog.locator(".attention-playlist-name")).toHaveText(["Favorites", "Watch Later"]);
 
-    test("the video bookmark icon turns solid once the video is bookmarked", async ({ page }) => {
-        await page.goto("https://www.youtube.com/watch?v=vid-solid");
+        await dialog.getByLabel("Watch Later").check();
 
-        const button = page.locator(".attention-player-controls button.video-bookmark-btn");
-        await expect(button).toHaveAttribute("data-saved", "false");
-        await expect(button.locator("svg")).toHaveAttribute("data-icon", "videoBookmark");
-
-        await button.click();
-
+        await expect(page.locator(".attention-toast")).toHaveText("Saved to Watch Later");
         await expect(button).toHaveAttribute("data-saved", "true");
         await expect(button.locator("svg")).toHaveAttribute("data-icon", "videoBookmarked");
-        await expect(button).toHaveAttribute("title", "Video bookmarked. Click to remove the bookmark");
+        await expect
+            .poll(() => storage(serviceWorker, "attention_bookmarked_videos"))
+            .toMatchObject([{ id: "vid-save", title: "Big Buck Bunny", channel: "Blender Foundation", time: 90 }]);
+        const playlists = await storage(serviceWorker, "attention_playlists");
+        expect(playlists.find((p) => p.id === "watch-later").videoIds).toEqual(["vid-save"]);
     });
 
-    test("clicking the solid bookmark removes the video again and shows toasts for both actions", async ({
+    test("a new playlist can be created from the panel, and the video can be in several playlists", async ({
         page,
         serviceWorker,
     }) => {
+        await page.goto("https://www.youtube.com/watch?v=vid-multi");
+        await page.locator(".video-bookmark-btn").click();
+        const dialog = page.getByRole("dialog", { name: "Save to playlist" });
+
+        await dialog.getByLabel("Favorites").check();
+        await dialog.getByRole("button", { name: "New playlist" }).click();
+        const name = dialog.getByLabel("New playlist name");
+        await expect(name).toBeFocused();
+        // Typing must not trigger YouTube shortcuts or close the panel
+        await name.pressSequentially("Kids films");
+        await name.press("Enter");
+
+        await expect(page.locator(".attention-toast")).toHaveText("Saved to Kids films");
+        await expect(dialog.getByLabel("Kids films")).toBeChecked();
+        await expect(dialog.getByLabel("Favorites")).toBeChecked();
+
+        const playlists = await storage(serviceWorker, "attention_playlists");
+        expect(playlists.filter((p) => p.videoIds.includes("vid-multi")).map((p) => p.name)).toEqual([
+            "Favorites",
+            "Kids films",
+        ]);
+    });
+
+    test("unchecking the last playlist removes the bookmark; Escape closes the panel", async ({ page, serviceWorker }) => {
         await page.goto("https://www.youtube.com/watch?v=vid-toggle");
-        const button = page.locator(".attention-player-controls button.video-bookmark-btn");
-        const toast = page.locator(".attention-toast");
-
+        const button = page.locator(".video-bookmark-btn");
         await button.click();
-        await expect(toast).toHaveText("Video bookmarked");
-        await expect(toast).toHaveClass(/attention-toast-visible/);
+        const dialog = page.getByRole("dialog", { name: "Save to playlist" });
+
+        await dialog.getByLabel("Favorites").check();
         await expect(button).toHaveAttribute("data-saved", "true");
+        await dialog.getByLabel("Favorites").uncheck();
 
-        await button.click();
-        await expect(toast).toHaveText("Video bookmark removed");
+        await expect(page.locator(".attention-toast")).toHaveText("Removed from Favorites. Bookmark removed");
         await expect(button).toHaveAttribute("data-saved", "false");
-        // The toast hides itself after ~2 seconds
-        await expect(toast).not.toHaveClass(/attention-toast-visible/);
+        await expect.poll(() => storage(serviceWorker, "attention_bookmarked_videos")).toEqual([]);
 
-        const data = await serviceWorker.evaluate(() => chrome.storage.sync.get("attention_bookmarked_videos"));
-        expect(JSON.parse(data.attention_bookmarked_videos)).toEqual([]);
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
     });
 
     test("saving a timestamp shows a confirmation toast", async ({ page }) => {
         await page.goto("https://www.youtube.com/watch?v=vid-ts-toast");
         await page.evaluate(() => (document.querySelector("video.video-stream").currentTime = 65));
 
-        await page.locator(".attention-player-controls button.bookmark-btn").click();
+        const button = page.locator(".attention-player-controls button.bookmark-btn");
+        await button.click();
+        await expect(page.locator(".attention-toast")).toHaveText("Bookmarked at 00:01:05");
+    });
 
-        await expect(page.locator(".attention-toast")).toHaveText("Timestamp 00:01:05 bookmarked");
+    test("bookmarking the same timestamp twice saves it once and says it is already bookmarked", async ({
+        page,
+        serviceWorker,
+    }) => {
+        await page.goto("https://www.youtube.com/watch?v=vid-dup");
+        await page.evaluate(() => (document.querySelector("video.video-stream").currentTime = 65));
+        const button = page.locator(".attention-player-controls button.bookmark-btn");
+
+        await button.click();
+        await expect(page.locator(".attention-toast")).toHaveText("Bookmarked at 00:01:05");
+        await button.click();
+        await expect(page.locator(".attention-toast")).toHaveText("Already bookmarked at 00:01:05");
+
+        const data = await serviceWorker.evaluate(() => chrome.storage.sync.get("vid-dup"));
+        expect(JSON.parse(data["vid-dup"])).toEqual([{ time: 65, desc: "Bookmark at 00:01:05" }]);
     });
 
     test("in the modern player the buttons sit in a shaded pill aligned with YouTube's controls", async ({ page }) => {

@@ -14,6 +14,7 @@ FILES=(
     manifest.json
     background.js
     icons.js
+    bookmarkStore.js
     contentScript.js
     hide.css
     player-buttons.css
@@ -24,6 +25,7 @@ FILES=(
     blocked.html
     videos.html
     timestamps.html
+    playlist.html
     dashboard.js
     dashboard.css
     assets

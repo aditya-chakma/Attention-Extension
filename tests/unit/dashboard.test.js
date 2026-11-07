@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -261,5 +261,299 @@ describe("bookmarked timestamps page", () => {
         expect(document.querySelector("#content .card-title b")).toBeNull();
         expect(document.querySelector("#content .card-channel img")).toBeNull();
         expect(window.__pwned).toBeUndefined();
+    });
+});
+
+// ---- Playlists
+
+const PLAYLISTS_KEY = "attention_playlists";
+bodies.playlist = pageBody("playlist.html");
+
+const storedPlaylists = () => JSON.parse(chrome.__storageData[PLAYLISTS_KEY]);
+const playlistNames = () => [...document.querySelectorAll("#content .playlist-row .playlist-name")].map((n) => n.textContent);
+const playlistRow = (id) => document.querySelector(`#content .playlist-row[data-playlist-id="${id}"]`);
+const settle = async () => {
+    for (let i = 0; i < 4; i++) await flushPromises();
+};
+
+const seedPlaylists = () => {
+    seedStorage(); // vidA, vidB bookmarked
+    chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+        { id: "favorites", name: "Favorites", videoIds: ["vidA", "vidB"] },
+        { id: "watch-later", name: "Watch Later", videoIds: ["vidB"] },
+    ]);
+};
+
+const typeInto = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+describe("bookmarked videos page layout", () => {
+    it("splits the page into videos on the left and playlists on the right", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+
+        const split = document.querySelector("#content .split");
+        expect(split.children).toHaveLength(2);
+        expect(split.children[0].matches(".split-main")).toBe(true);
+        expect(split.children[0].querySelector(".video-card")).not.toBeNull();
+        expect(split.children[1].matches(".split-side")).toBe(true);
+        expect(split.children[1].querySelector(".playlist-row")).not.toBeNull();
+    });
+
+    it("shows the default playlists when none were saved yet", async () => {
+        await renderPage("videos");
+
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later"]);
+        expect(playlistRow("favorites").querySelector(".playlist-count").textContent).toBe("0 videos");
+    });
+
+    it("each playlist links to its own page and shows its size and latest video thumbnail", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+
+        const row = playlistRow("favorites");
+        expect(row.querySelector("a.playlist-name").getAttribute("href")).toBe("playlist.html?id=favorites");
+        expect(row.querySelector(".playlist-count").textContent).toBe("2 videos");
+        expect(row.querySelector(".playlist-thumb img").src).toBe("https://i.ytimg.com/vi/vidB/mqdefault.jpg");
+        expect(playlistRow("watch-later").querySelector(".playlist-count").textContent).toBe("1 video");
+    });
+
+    it("video cards show which playlists they are in", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+
+        const chips = (title) =>
+            [...[...document.querySelectorAll("#content .video-card")]
+                .find((c) => c.querySelector(".card-title").textContent === title)
+                .querySelectorAll(".chip")].map((c) => c.textContent);
+        expect(chips("Second video")).toEqual(["Favorites", "Watch Later"]);
+        expect(chips("First video")).toEqual(["Favorites"]);
+    });
+
+    it("Recent shows the 10 newest videos; All shows every video", async () => {
+        const videos = Array.from({ length: 12 }, (_, i) => ({
+            id: "v" + i,
+            title: "Video " + i,
+            time: 0,
+            savedAt: 1000 + i,
+        }));
+        chrome.__storageData[VIDEOS_KEY] = JSON.stringify(videos);
+        await renderPage("videos");
+
+        const tabs = [...document.querySelectorAll("#content .segment")];
+        expect(tabs.map((t) => t.textContent)).toEqual(["Recent", "All (12)"]);
+        expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+        expect(cardTitles()).toHaveLength(10);
+        expect(cardTitles()[0]).toBe("Video 11");
+
+        tabs[1].click();
+        await settle();
+
+        expect(cardTitles()).toHaveLength(12);
+        expect(document.querySelector('#content .segment[data-view="all"]').getAttribute("aria-selected")).toBe("true");
+
+        document.querySelector('#content .segment[data-view="recent"]').click();
+        await settle();
+        document.querySelector("#content .link-btn").click(); // "Show all 12 videos"
+        await settle();
+        expect(cardTitles()).toHaveLength(12);
+        document.querySelector('#content .segment[data-view="recent"]').click();
+        await settle();
+    });
+
+    it("deleting a video from the left list also takes it out of its playlists", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+
+        [...document.querySelectorAll("#content .video-card")]
+            .find((c) => c.querySelector(".card-title").textContent === "Second video")
+            .querySelector(".delete-btn")
+            .click();
+        await settle();
+
+        expect(JSON.parse(chrome.__storageData[VIDEOS_KEY]).map((v) => v.id)).toEqual(["vidA"]);
+        expect(storedPlaylists().map((p) => p.videoIds)).toEqual([["vidA"], []]);
+    });
+});
+
+describe("managing playlists on the dashboard", () => {
+    it("creates a playlist with the inline form", async () => {
+        await renderPage("videos");
+
+        document.querySelector("#content .new-playlist-btn").click();
+        await settle();
+        const input = document.querySelector("#content .split-side .inline-form input");
+        expect(document.activeElement).toBe(input);
+        const submit = document.querySelector("#content .inline-form button[type=submit]");
+        expect(submit.disabled).toBe(true);
+
+        typeInto(input, "Lectures");
+        expect(submit.disabled).toBe(false);
+        input.form.requestSubmit();
+        await settle();
+
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later", "Lectures"]);
+        expect(document.querySelector("#content .inline-form")).toBeNull();
+    });
+
+    it("shows the validation error and keeps the form open for a duplicate name", async () => {
+        await renderPage("videos");
+
+        document.querySelector("#content .new-playlist-btn").click();
+        await settle();
+        typeInto(document.querySelector("#content .inline-form input"), "Watch later");
+        document.querySelector("#content .inline-form").requestSubmit();
+        await settle();
+
+        expect(document.querySelector("#content .form-error").textContent).toBe('A playlist named "Watch later" already exists');
+        expect(document.querySelector("#content .inline-form input").value).toBe("Watch later");
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later"]);
+    });
+
+    it("Escape cancels the form", async () => {
+        await renderPage("videos");
+
+        document.querySelector("#content .new-playlist-btn").click();
+        await settle();
+        document
+            .querySelector("#content .inline-form input")
+            .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await settle();
+
+        expect(document.querySelector("#content .inline-form")).toBeNull();
+    });
+
+    it("renames a playlist in place", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+
+        playlistRow("watch-later").querySelector(".rename-btn").click();
+        await settle();
+        const input = playlistRow("watch-later").querySelector(".inline-form input");
+        expect(input.value).toBe("Watch Later");
+
+        typeInto(input, "Queue");
+        input.form.requestSubmit();
+        await settle();
+
+        expect(playlistNames()).toEqual(["Favorites", "Queue"]);
+        expect(storedPlaylists()[1]).toEqual({ id: "watch-later", name: "Queue", videoIds: ["vidB"] });
+    });
+
+    it("an open form survives a re-render caused by changes elsewhere", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+        document.querySelector("#content .new-playlist-btn").click();
+        await settle();
+        typeInto(document.querySelector("#content .inline-form input"), "Half typed");
+
+        // e.g. a video saved from a YouTube tab
+        chrome.storage.sync.set({ attention_video_titles: JSON.stringify({}) });
+        await settle();
+
+        const input = document.querySelector("#content .inline-form input");
+        expect(input.value).toBe("Half typed");
+        expect(document.activeElement).toBe(input);
+    });
+
+    it("deleting a playlist asks first and warns about videos that will be removed", async () => {
+        seedPlaylists(); // vidA only in Favorites; vidB also in Watch Later
+        await renderPage("videos");
+        const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        playlistRow("favorites").querySelector(".delete-playlist-btn").click();
+        await settle();
+
+        expect(confirm).toHaveBeenCalledWith(
+            'Delete the playlist "Favorites"?\n\n1 video that is not in any other playlist will also be removed from your bookmarks.'
+        );
+        expect(playlistNames()).toEqual(["Watch Later"]);
+        expect(JSON.parse(chrome.__storageData[VIDEOS_KEY]).map((v) => v.id)).toEqual(["vidB"]);
+        confirm.mockRestore();
+    });
+
+    it("cancelling the confirmation keeps the playlist", async () => {
+        seedPlaylists();
+        await renderPage("videos");
+        const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+        playlistRow("favorites").querySelector(".delete-playlist-btn").click();
+        await settle();
+
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later"]);
+        confirm.mockRestore();
+    });
+
+    it("renders malicious playlist names as plain text", async () => {
+        chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+            { id: "x", name: '<img src=x onerror="window.__pwnedPl=1">', videoIds: [] },
+        ]);
+        await renderPage("videos");
+
+        expect(playlistNames()).toEqual(['<img src=x onerror="window.__pwnedPl=1">']);
+        expect(document.querySelector("#content .playlist-info img")).toBeNull();
+        expect(window.__pwnedPl).toBeUndefined();
+    });
+});
+
+describe("playlist page", () => {
+    const openPlaylistPage = async (id) => {
+        window.history.replaceState({}, "", "/playlist.html?id=" + encodeURIComponent(id));
+        await renderPage("playlist");
+    };
+
+    it("shows the playlist's videos, newest additions first", async () => {
+        seedPlaylists();
+        await openPlaylistPage("favorites");
+
+        expect(document.querySelector("#content .playlist-title").textContent).toBe("Favorites");
+        expect(document.querySelector("#content .playlist-count").textContent).toBe("2 videos");
+        expect(cardTitles()).toEqual(["Second video", "First video"]);
+        expect(document.title).toBe("Attention — Favorites");
+        expect(document.querySelector("#content .back-link").getAttribute("href")).toBe("videos.html");
+    });
+
+    it("keeps the videos tab highlighted", async () => {
+        await openPlaylistPage("favorites");
+
+        expect(document.getElementById("tab-videos").classList.contains("active")).toBe(true);
+    });
+
+    it("the delete button removes the video from this playlist only", async () => {
+        seedPlaylists();
+        await openPlaylistPage("watch-later");
+
+        const btn = document.querySelector("#content .video-card .delete-btn");
+        expect(btn.getAttribute("aria-label")).toBe("Remove from playlist");
+        btn.click();
+        await settle();
+
+        expect(storedPlaylists().map((p) => p.videoIds)).toEqual([["vidA", "vidB"], []]);
+        // Still in Favorites, so still bookmarked
+        expect(JSON.parse(chrome.__storageData[VIDEOS_KEY]).map((v) => v.id)).toEqual(["vidA", "vidB"]);
+        expect(document.querySelector("#content .empty").textContent).toContain("No videos in this playlist yet");
+    });
+
+    it("can rename the playlist from its page", async () => {
+        seedPlaylists();
+        await openPlaylistPage("favorites");
+
+        document.querySelector("#content .playlist-header .rename-btn").click();
+        await settle();
+        const input = document.querySelector("#content .playlist-header .inline-form input");
+        typeInto(input, "Best of");
+        input.form.requestSubmit();
+        await settle();
+
+        expect(document.querySelector("#content .playlist-title").textContent).toBe("Best of");
+    });
+
+    it("explains when the playlist does not exist", async () => {
+        await openPlaylistPage("nope");
+
+        expect(document.querySelector("#content .empty").textContent).toBe("This playlist doesn't exist anymore.");
+        expect(document.querySelector("#content .back-link")).not.toBeNull();
     });
 });

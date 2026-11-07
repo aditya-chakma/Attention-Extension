@@ -16,8 +16,8 @@ const addNewBookmark = (bookmarksElement, bookmark) => {
     newBookmarkElement.className = "bookmark";
     newBookmarkElement.setAttribute("timestamp", bookmark.time);
 
-    setBookmarkAttributes("play", onPlay, controlsElement);
-    setBookmarkAttributes("delete", onDelete, controlsElement);
+    addControlButton(controlsElement, "Play", "play", onPlay);
+    addControlButton(controlsElement, "Delete", "trash", onDelete);
 
     newBookmarkElement.appendChild(bookmarkTitleElement);
     newBookmarkElement.appendChild(controlsElement);
@@ -38,8 +38,11 @@ const viewBookmarks = (currentBookmarks = []) => {
     }
 };
 
+// The click target can be the button's <svg>/<path>, so resolve the row from the button
+const bookmarkTimeOf = (e) => e.currentTarget.closest(".bookmark").getAttribute("timestamp");
+
 const onPlay = async (e) => {
-    const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
+    const bookmarkTime = bookmarkTimeOf(e);
     const activeTab = await getActiveTabURL();
     if (!activeTab || !activeTab.id) return;
 
@@ -51,9 +54,10 @@ const onPlay = async (e) => {
 };
 
 const onDelete = async (e) => {
+    // Read before awaiting: currentTarget is cleared once the event finishes dispatching
+    const bookmarkTime = bookmarkTimeOf(e);
     const activeTab = await getActiveTabURL();
     if (!activeTab || !activeTab.id) return;
-    const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
 
     const bookmarkElementToDelete = document.getElementById("bookmark-" + bookmarkTime);
 
@@ -70,13 +74,16 @@ const onDelete = async (e) => {
     );
 };
 
-const setBookmarkAttributes = (src, eventListener, controlParent) => {
-    const controlElement = document.createElement("img");
-
-    controlElement.src = "./assets/" + src + ".png";
-    controlElement.title = src;
-    controlElement.addEventListener("click", eventListener);
-    controlParent.appendChild(controlElement);
+// Icon-only button; static markup from the icons.js registry, so innerHTML is safe
+const addControlButton = (controlParent, label, iconName, eventListener) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "control-btn";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.innerHTML = globalThis.ATTENTION_ICONS.markup[iconName];
+    button.addEventListener("click", eventListener);
+    controlParent.appendChild(button);
 };
 
 document.addEventListener("DOMContentLoaded", async () => {

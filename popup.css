@@ -41,11 +41,34 @@
   padding-left: 2px;
 }
 
-.bookmark-controls img {
-  margin: 0 4px;
-  width: 18px;
-  height: 18px;
+.control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 1px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #314d3e;
   cursor: pointer;
+  vertical-align: middle;
+}
+
+.control-btn:hover {
+  background-color: #e6efe9;
+}
+
+/* Same size for both icons regardless of the size baked into their markup */
+.control-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.control-btn[title="Delete"]:hover {
+  color: #c62828;
 }
 
 .bookmark-controls {

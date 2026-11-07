@@ -38,7 +38,8 @@ describe("popup", () => {
         expect(items[0].getAttribute("timestamp")).toBe("5");
         expect(items[0].querySelector(".bookmark-title").textContent).toBe("Bookmark at 00:00:05");
         expect(items[1].querySelector(".bookmark-title").textContent).toBe("Bookmark at 00:01:05");
-        expect(items[0].querySelectorAll(".bookmark-controls img")).toHaveLength(2);
+        expect([...items[0].querySelectorAll(".bookmark-controls button")].map((b) => b.title)).toEqual(["Play", "Delete"]);
+        expect(items[0].querySelectorAll(".bookmark-controls img")).toHaveLength(0);
     });
 
     it("shows an empty state when the video has no bookmarks", async () => {
@@ -59,6 +60,17 @@ describe("popup", () => {
         await renderPopup(undefined);
 
         expect(document.querySelector(".container").textContent.trim()).toBe("Cannot access current tab information.");
+    });
+
+    it("draws the play and delete controls from the central icon registry", async () => {
+        await renderPopup(WATCH_TAB);
+
+        const parse = (markup) => new DOMParser().parseFromString(markup, "text/html").body.innerHTML;
+        const [play, del] = document.querySelectorAll("#bookmark-5 .bookmark-controls button");
+        expect(play.innerHTML).toBe(parse(globalThis.ATTENTION_ICONS.markup.play));
+        expect(del.innerHTML).toBe(parse(globalThis.ATTENTION_ICONS.markup.trash));
+        expect(play.getAttribute("aria-label")).toBe("Play");
+        expect(del.getAttribute("aria-label")).toBe("Delete");
     });
 
     it("draws the dashboard button icon from the central icon registry", async () => {
@@ -92,7 +104,8 @@ describe("popup", () => {
     it("play sends a PLAY message with the bookmark time to the active tab", async () => {
         await renderPopup(WATCH_TAB);
 
-        document.querySelector('#bookmark-65 img[title="play"]').click();
+        // Click the icon itself, as a user would: the row must resolve from the button
+        document.querySelector('#bookmark-65 button[title="Play"] svg').dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await flushPromises();
 
         expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(11, { source: "yt-watch", type: "PLAY", value: "65" });
@@ -104,7 +117,7 @@ describe("popup", () => {
             callback([{ time: 65, desc: "Bookmark at 00:01:05" }]);
         });
 
-        document.querySelector('#bookmark-5 img[title="delete"]').click();
+        document.querySelector('#bookmark-5 button[title="Delete"] svg').dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await flushPromises();
 
         expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(

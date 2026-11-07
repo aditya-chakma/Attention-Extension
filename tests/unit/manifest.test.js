@@ -40,6 +40,12 @@ describe("manifest.json", () => {
         expect(contentScript.css).toContain("player-buttons.css");
     });
 
+    it("loads the bookmark store before the content script", () => {
+        const [contentScript] = manifest.content_scripts;
+        expect(contentScript.js.indexOf("bookmarkStore.js")).toBeGreaterThanOrEqual(0);
+        expect(contentScript.js.indexOf("bookmarkStore.js")).toBeLessThan(contentScript.js.indexOf("contentScript.js"));
+    });
+
     it("exposes blocked.html to the matched sites", () => {
         const resources = manifest.web_accessible_resources.flatMap((r) => r.resources);
         expect(resources).toContain("blocked.html");

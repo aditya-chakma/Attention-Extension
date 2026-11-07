@@ -28,6 +28,10 @@
         videoBookmark: "M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z",
         // "bookmark": solid, shown once the current video is bookmarked
         videoBookmarked: "M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z",
+        // "close": closes the Save to playlist panel
+        close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+        // "add": "New playlist" in the Save to playlist panel
+        add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
     });
 
     const ICON_MARKUP = Object.freeze({
@@ -40,6 +44,20 @@
         play:
             '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">' +
             '<path d="M8 5v14l11-7z" /></svg>',
+        // Plus: "New playlist" on the dashboard
+        plus:
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>',
+        // Pencil: rename a playlist
+        edit:
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>',
+        // Bulleted list: placeholder thumbnail for an empty playlist
+        playlist:
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>',
         // Four-square grid: the popup's "open dashboard" button
         dashboardGrid:
             '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" ' +

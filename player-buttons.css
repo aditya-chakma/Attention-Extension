@@ -111,6 +111,13 @@
     transition: opacity 0.2s cubic-bezier(0.05, 0, 0, 1), transform 0.2s cubic-bezier(0.05, 0, 0, 1);
 }
 
+/* The Save to playlist panel covers the toast's usual spot, so show it at the top */
+.attention-panel-open .attention-toast {
+    top: 24px;
+    bottom: auto;
+    z-index: 72;
+}
+
 .attention-toast-visible {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
@@ -123,4 +130,214 @@
 
 .ytp-delhi-modern.ytp-xsmall-width-mode .ytp-chrome-bottom .attention-player-controls .ytp-button.attention-player-btn {
     width: 40px;
+}
+
+/* ---- "Save to playlist" panel ------------------------------------------
+   Positioned by contentScript.js just above the bookmark button, inside
+   .html5-video-player. Looks like YouTube's own player menus (settings). */
+.attention-save-dialog {
+    position: absolute;
+    z-index: 71;
+    display: flex;
+    flex-direction: column;
+    width: 264px;
+    max-width: calc(100% - 24px);
+    padding: 8px 0;
+    border-radius: 12px;
+    background: rgba(28, 28, 28, 0.9);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.4);
+    color: #eee;
+    font-family: "YouTube Noto", Roboto, Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    text-align: left;
+    text-shadow: none;
+    overflow: hidden;
+    cursor: default;
+}
+
+.attention-save-dialog button {
+    font: inherit;
+    cursor: pointer;
+}
+
+.attention-save-dialog svg {
+    flex: none;
+    width: 24px;
+    height: 24px;
+}
+
+.attention-save-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px 6px 16px;
+}
+
+.attention-save-title {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.attention-dialog-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #fff;
+}
+
+.attention-dialog-close:hover,
+.attention-dialog-close:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Only the list scrolls; header and actions stay put */
+.attention-playlist-options {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-y: auto;
+}
+
+.attention-playlist-option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 16px;
+    cursor: pointer;
+}
+
+.attention-playlist-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.attention-playlist-option input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: #3ea6ff;
+    cursor: pointer;
+}
+
+.attention-playlist-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attention-playlist-empty {
+    padding: 8px 16px;
+    color: #aaa;
+}
+
+.attention-new-playlist {
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.attention-new-playlist-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: #fff;
+    text-align: left;
+}
+
+.attention-new-playlist-btn:hover,
+.attention-new-playlist-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.attention-new-playlist-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 16px 4px;
+}
+
+.attention-new-playlist-form input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 0;
+    border: none;
+    border-bottom: 1px solid #aaa;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    outline: none;
+}
+
+.attention-new-playlist-form input:focus {
+    border-bottom: 2px solid #3ea6ff;
+    padding-bottom: 3px;
+}
+
+.attention-form-error {
+    min-height: 0;
+    color: #ff8a80;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.attention-form-error:empty {
+    display: none;
+}
+
+.attention-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.attention-text-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 18px;
+    background: transparent;
+    color: #fff;
+    font-weight: 500;
+}
+
+.attention-text-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.attention-text-btn.attention-primary {
+    color: #3ea6ff;
+}
+
+.attention-text-btn:disabled {
+    color: #717171;
+    cursor: default;
+}
+
+.attention-remove-bookmark {
+    margin-top: 4px;
+    padding: 10px 16px;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    color: #ff8a80;
+    text-align: left;
+}
+
+.attention-remove-bookmark:hover,
+.attention-remove-bookmark:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
 }
