@@ -539,3 +539,189 @@ a.playlist-name:hover {
     font-size: 22px;
     overflow-wrap: anywhere;
 }
+
+/* Favorites and Watch Later: fixed playlists, no rename/delete buttons */
+.default-badge {
+    flex: none;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: default;
+}
+
+/* ---- Undo bar (bottom-right, after deleting a video) ---- */
+
+.undo-bar {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 10px 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background-color: var(--surface-hover);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    color: var(--text);
+    font-size: 14px;
+    animation: modal-rise 0.15s ease-out;
+}
+
+.undo-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.undo-btn:hover,
+.undo-btn:focus-visible {
+    background-color: rgba(138, 180, 248, 0.15);
+    outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .undo-bar {
+        animation: none;
+    }
+}
+
+/* ---- Pagination ---- */
+
+.pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 20px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.pager-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pager-size select {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pager-size select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.pager-range {
+    font-variant-numeric: tabular-nums;
+}
+
+.pager-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.pager-status {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Confirmation modal ---- */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background-color: rgba(0, 0, 0, 0.6);
+    animation: modal-fade 0.15s ease-out;
+}
+
+.modal {
+    width: 100%;
+    max-width: 420px;
+    padding: 22px 24px 18px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background-color: var(--surface);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    animation: modal-rise 0.15s ease-out;
+}
+
+.modal-title {
+    margin: 0 0 10px;
+    font-size: 18px;
+    overflow-wrap: anywhere;
+}
+
+.modal-message p {
+    margin: 0 0 10px;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.btn-danger {
+    border-color: var(--danger);
+    background-color: var(--danger);
+    color: var(--bg);
+    font-weight: bold;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #f6aea9;
+}
+
+.btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+@keyframes modal-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes modal-rise {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-backdrop,
+    .modal {
+        animation: none;
+    }
+}

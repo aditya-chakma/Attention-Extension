@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,7 +65,7 @@ describe("page chrome (header and navigation)", () => {
 });
 
 describe("bookmarked videos page", () => {
-    it("lists videos newest first with thumbnail, channel and link to the saved time", async () => {
+    it("lists videos newest first with thumbnail, channel and a link to the video", async () => {
         seedStorage();
         await renderPage("videos");
 
@@ -74,22 +74,34 @@ describe("bookmarked videos page", () => {
         const cards = document.querySelectorAll("#content .video-card");
         const first = cards[1]; // vidA
         expect(first.querySelector(".thumb img").src).toBe("https://i.ytimg.com/vi/vidA/mqdefault.jpg");
-        expect(first.querySelector(".thumb").href).toBe("https://www.youtube.com/watch?v=vidA&t=65s");
-        expect(first.querySelector("a.card-title").href).toBe("https://www.youtube.com/watch?v=vidA&t=65s");
+        // The position it was saved at is no longer used
+        expect(first.querySelector(".thumb").href).toBe("https://www.youtube.com/watch?v=vidA");
+        expect(first.querySelector("a.card-title").href).toBe("https://www.youtube.com/watch?v=vidA");
         expect(first.querySelector(".card-channel").textContent).toBe("Channel A");
 
         expect(cards[0].querySelector("a.card-title").href).toBe("https://www.youtube.com/watch?v=vidB");
     });
 
-    it("shows a short 'time · date' meta line, omitting the time when saved at the start", async () => {
+    it("shows only the date the video was saved, not a video timestamp", async () => {
         seedStorage();
         await renderPage("videos");
 
         const metas = [...document.querySelectorAll("#content .card-meta")].map((m) => m.textContent);
-        expect(metas[1]).toMatch(/^00:01:05 · .+\d{4}$/); // vidA, saved at 65s
-        expect(metas[1]).not.toContain("Bookmarked at");
-        expect(metas[0]).not.toContain("00:00:00"); // vidB, saved at 0s: date only
-        expect(metas[0]).toMatch(/\d{4}$/);
+        const date = (t) => new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+        expect(metas).toEqual(["Saved " + date(1800000000000), "Saved " + date(1700000000000)]);
+        expect(metas.join(" ")).not.toMatch(/\d{2}:\d{2}/);
+    });
+
+    it("shows titles saved with YouTube's notification count without it", async () => {
+        chrome.__storageData[VIDEOS_KEY] = JSON.stringify([{ id: "vidN", title: "(1) Counted", time: 0, savedAt: 1 }]);
+        chrome.__storageData[TITLES_KEY] = JSON.stringify({ vidT: "(2) Timestamped" });
+        chrome.__storageData.vidT = JSON.stringify([{ time: 1, desc: "Bookmark at 00:00:01" }]);
+
+        await renderPage("videos");
+        expect(cardTitles()).toEqual(["Counted"]);
+
+        await renderPage("timestamps");
+        expect(groupTitles()).toEqual(["Timestamped"]);
     });
 
     it("draws the trash and play icons from the central icon registry", async () => {
@@ -284,6 +296,30 @@ const seedPlaylists = () => {
     ]);
 };
 
+const seedManyVideos = (count, extra = {}) => {
+    const videos = Array.from({ length: count }, (_, i) => ({ id: "v" + i, title: "Video " + i, time: 0, savedAt: 1000 + i }));
+    chrome.__storageData[VIDEOS_KEY] = JSON.stringify(videos);
+    for (const [key, value] of Object.entries(extra)) chrome.__storageData[key] = value;
+    return videos;
+};
+
+const pagerText = () => ({
+    range: document.querySelector("#content .pager-range")?.textContent,
+    status: document.querySelector("#content .pager-status")?.textContent,
+});
+
+const showView = async (view) => {
+    document.querySelector(`#content .segment[data-view="${view}"]`).click();
+    await settle();
+};
+
+const setPageSize = async (size) => {
+    const select = document.querySelector("#content .pager-size select");
+    select.value = String(size);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+};
+
 const typeInto = (input, value) => {
     input.value = value;
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -332,14 +368,8 @@ describe("bookmarked videos page layout", () => {
         expect(chips("First video")).toEqual(["Favorites"]);
     });
 
-    it("Recent shows the 10 newest videos; All shows every video", async () => {
-        const videos = Array.from({ length: 12 }, (_, i) => ({
-            id: "v" + i,
-            title: "Video " + i,
-            time: 0,
-            savedAt: 1000 + i,
-        }));
-        chrome.__storageData[VIDEOS_KEY] = JSON.stringify(videos);
+    it("Recent shows the 10 newest videos without paging; All pages through every video", async () => {
+        seedManyVideos(12);
         await renderPage("videos");
 
         const tabs = [...document.querySelectorAll("#content .segment")];
@@ -347,20 +377,16 @@ describe("bookmarked videos page layout", () => {
         expect(tabs[0].getAttribute("aria-selected")).toBe("true");
         expect(cardTitles()).toHaveLength(10);
         expect(cardTitles()[0]).toBe("Video 11");
+        expect(document.querySelector("#content .pager")).toBeNull();
 
-        tabs[1].click();
-        await settle();
-
-        expect(cardTitles()).toHaveLength(12);
-        expect(document.querySelector('#content .segment[data-view="all"]').getAttribute("aria-selected")).toBe("true");
-
-        document.querySelector('#content .segment[data-view="recent"]').click();
-        await settle();
         document.querySelector("#content .link-btn").click(); // "Show all 12 videos"
         await settle();
-        expect(cardTitles()).toHaveLength(12);
-        document.querySelector('#content .segment[data-view="recent"]').click();
-        await settle();
+
+        expect(document.querySelector('#content .segment[data-view="all"]').getAttribute("aria-selected")).toBe("true");
+        expect(cardTitles()).toHaveLength(10);
+        expect(pagerText()).toEqual({ range: "1–10 of 12 videos", status: "Page 1 of 2" });
+
+        await showView("recent");
     });
 
     it("deleting a video from the left list also takes it out of its playlists", async () => {
@@ -425,21 +451,25 @@ describe("managing playlists on the dashboard", () => {
         expect(document.querySelector("#content .inline-form")).toBeNull();
     });
 
-    it("renames a playlist in place", async () => {
+    it("renames a custom playlist in place", async () => {
         seedPlaylists();
+        chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+            ...JSON.parse(chrome.__storageData[PLAYLISTS_KEY]),
+            { id: "pl-mine", name: "Mine", videoIds: ["vidB"] },
+        ]);
         await renderPage("videos");
 
-        playlistRow("watch-later").querySelector(".rename-btn").click();
+        playlistRow("pl-mine").querySelector(".rename-btn").click();
         await settle();
-        const input = playlistRow("watch-later").querySelector(".inline-form input");
-        expect(input.value).toBe("Watch Later");
+        const input = playlistRow("pl-mine").querySelector(".inline-form input");
+        expect(input.value).toBe("Mine");
 
         typeInto(input, "Queue");
         input.form.requestSubmit();
         await settle();
 
-        expect(playlistNames()).toEqual(["Favorites", "Queue"]);
-        expect(storedPlaylists()[1]).toEqual({ id: "watch-later", name: "Queue", videoIds: ["vidB"] });
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later", "Queue"]);
+        expect(storedPlaylists()[2]).toEqual({ id: "pl-mine", name: "Queue", videoIds: ["vidB"] });
     });
 
     it("an open form survives a re-render caused by changes elsewhere", async () => {
@@ -458,32 +488,112 @@ describe("managing playlists on the dashboard", () => {
         expect(document.activeElement).toBe(input);
     });
 
-    it("deleting a playlist asks first and warns about videos that will be removed", async () => {
-        seedPlaylists(); // vidA only in Favorites; vidB also in Watch Later
+    const seedCustomPlaylist = () => {
+        seedStorage(); // vidA, vidB bookmarked
+        chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+            { id: "favorites", name: "Favorites", videoIds: ["vidB"] },
+            { id: "watch-later", name: "Watch Later", videoIds: [] },
+            { id: "pl-old", name: "Old stuff", videoIds: ["vidA", "vidB"] },
+        ]);
+    };
+    const modal = () => document.querySelector(".modal-backdrop .modal");
+
+    it("Favorites and Watch Later have neither rename nor delete, just a Default badge; other playlists have both", async () => {
+        seedCustomPlaylist();
         await renderPage("videos");
-        const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
 
-        playlistRow("favorites").querySelector(".delete-playlist-btn").click();
-        await settle();
-
-        expect(confirm).toHaveBeenCalledWith(
-            'Delete the playlist "Favorites"?\n\n1 video that is not in any other playlist will also be removed from your bookmarks.'
-        );
-        expect(playlistNames()).toEqual(["Watch Later"]);
-        expect(JSON.parse(chrome.__storageData[VIDEOS_KEY]).map((v) => v.id)).toEqual(["vidB"]);
-        confirm.mockRestore();
+        for (const id of ["favorites", "watch-later"]) {
+            expect(playlistRow(id).querySelector(".rename-btn")).toBeNull();
+            expect(playlistRow(id).querySelector(".delete-playlist-btn")).toBeNull();
+            expect(playlistRow(id).querySelector(".default-badge").textContent).toBe("Default");
+        }
+        expect(playlistRow("pl-old").querySelector(".rename-btn")).not.toBeNull();
+        expect(playlistRow("pl-old").querySelector(".delete-playlist-btn")).not.toBeNull();
+        expect(playlistRow("pl-old").querySelector(".default-badge")).toBeNull();
     });
 
-    it("cancelling the confirmation keeps the playlist", async () => {
-        seedPlaylists();
+    it("deleting a playlist opens a confirmation modal instead of the browser's confirm()", async () => {
+        seedCustomPlaylist();
         await renderPage("videos");
-        const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+        const browserConfirm = vi.spyOn(window, "confirm");
 
-        playlistRow("favorites").querySelector(".delete-playlist-btn").click();
+        playlistRow("pl-old").querySelector(".delete-playlist-btn").click();
         await settle();
 
+        expect(browserConfirm).not.toHaveBeenCalled();
+        expect(modal().getAttribute("role")).toBe("alertdialog");
+        expect(modal().getAttribute("aria-modal")).toBe("true");
+        expect(modal().querySelector(".modal-title").textContent).toBe('Delete "Old stuff"?');
+        // vidA is only in this playlist; vidB is also in Favorites
+        expect([...modal().querySelectorAll(".modal-message p")].map((p) => p.textContent)).toEqual([
+            "The playlist will be deleted. This can't be undone.",
+            "1 video that is not in any other playlist will also be removed from your bookmarks.",
+        ]);
+        expect(document.activeElement.textContent).toBe("Cancel"); // safe default
+        // Nothing is deleted until confirmed
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later", "Old stuff"]);
+
+        modal().querySelector(".btn-danger").click();
+        await settle();
+
+        expect(modal()).toBeNull();
         expect(playlistNames()).toEqual(["Favorites", "Watch Later"]);
-        confirm.mockRestore();
+        expect(JSON.parse(chrome.__storageData[VIDEOS_KEY]).map((v) => v.id)).toEqual(["vidB"]);
+        browserConfirm.mockRestore();
+    });
+
+    it("omits the warning when every video is also in another playlist", async () => {
+        seedCustomPlaylist();
+        chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+            { id: "favorites", name: "Favorites", videoIds: ["vidA", "vidB"] },
+            { id: "pl-old", name: "Old stuff", videoIds: ["vidA"] },
+        ]);
+        await renderPage("videos");
+
+        playlistRow("pl-old").querySelector(".delete-playlist-btn").click();
+        await settle();
+
+        expect(modal().querySelectorAll(".modal-message p")).toHaveLength(1);
+        modal().querySelector(".btn").click(); // Cancel
+        await settle();
+    });
+
+    it.each([
+        ["Cancel", () => modal().querySelector(".modal-actions .btn:not(.btn-danger)").click()],
+        ["Escape", () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))],
+        ["a click on the backdrop", () => document.querySelector(".modal-backdrop").click()],
+    ])("%s keeps the playlist", async (_, dismiss) => {
+        seedCustomPlaylist();
+        await renderPage("videos");
+        const trigger = playlistRow("pl-old").querySelector(".delete-playlist-btn");
+        trigger.focus();
+        trigger.click();
+        await settle();
+
+        dismiss();
+        await settle();
+
+        expect(modal()).toBeNull();
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later", "Old stuff"]);
+        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+    });
+
+    it("a click inside the modal does not dismiss it, and Tab keeps focus inside", async () => {
+        seedCustomPlaylist();
+        await renderPage("videos");
+        playlistRow("pl-old").querySelector(".delete-playlist-btn").click();
+        await settle();
+
+        modal().querySelector(".modal-title").click();
+        expect(modal()).not.toBeNull();
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+        expect(document.activeElement.textContent).toBe("Delete playlist");
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+        expect(document.activeElement.textContent).toBe("Cancel");
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await settle();
     });
 
     it("renders malicious playlist names as plain text", async () => {
@@ -492,7 +602,7 @@ describe("managing playlists on the dashboard", () => {
         ]);
         await renderPage("videos");
 
-        expect(playlistNames()).toEqual(['<img src=x onerror="window.__pwnedPl=1">']);
+        expect(playlistNames()).toEqual(["Favorites", "Watch Later", '<img src=x onerror="window.__pwnedPl=1">']);
         expect(document.querySelector("#content .playlist-info img")).toBeNull();
         expect(window.__pwnedPl).toBeUndefined();
     });
@@ -536,9 +646,13 @@ describe("playlist page", () => {
         expect(document.querySelector("#content .empty").textContent).toContain("No videos in this playlist yet");
     });
 
-    it("can rename the playlist from its page", async () => {
+    it("can rename a custom playlist from its page", async () => {
         seedPlaylists();
-        await openPlaylistPage("favorites");
+        chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+            ...JSON.parse(chrome.__storageData[PLAYLISTS_KEY]),
+            { id: "pl-mine", name: "Mine", videoIds: [] },
+        ]);
+        await openPlaylistPage("pl-mine");
 
         document.querySelector("#content .playlist-header .rename-btn").click();
         await settle();
@@ -550,10 +664,214 @@ describe("playlist page", () => {
         expect(document.querySelector("#content .playlist-title").textContent).toBe("Best of");
     });
 
+    it("a default playlist's page has no rename or delete, but its videos can still be removed", async () => {
+        seedPlaylists();
+        await openPlaylistPage("favorites");
+
+        expect(document.querySelector("#content .playlist-header .rename-btn")).toBeNull();
+        expect(document.querySelector("#content .playlist-header .delete-playlist-btn")).toBeNull();
+        expect(document.querySelector("#content .playlist-header .default-badge")).not.toBeNull();
+        expect(document.querySelectorAll("#content .video-card .delete-btn")).toHaveLength(2);
+    });
+
     it("explains when the playlist does not exist", async () => {
         await openPlaylistPage("nope");
 
         expect(document.querySelector("#content .empty").textContent).toBe("This playlist doesn't exist anymore.");
         expect(document.querySelector("#content .back-link")).not.toBeNull();
+    });
+});
+
+describe("pagination", () => {
+    const openPlaylistPage = async (id) => {
+        window.history.replaceState({}, "", "/playlist.html?id=" + encodeURIComponent(id));
+        await renderPage("playlist");
+    };
+    const clickPager = async (which) => {
+        document.querySelector(`#content .pager-${which}`).click();
+        await settle();
+    };
+
+    afterEach(async () => {
+        // Page size, page numbers and the Recent/All choice are page-level UI
+        // state; put them back so tests don't leak into each other
+        window.localStorage.clear();
+        if (document.querySelector("#content .pager-size select")) await setPageSize(10);
+        if (document.querySelector('#content .segment[data-view="recent"]')) await showView("recent");
+    });
+
+    it("shows 10 per page by default and steps through pages with Previous/Next", async () => {
+        seedManyVideos(23);
+        await renderPage("videos");
+        await showView("all");
+
+        expect(cardTitles()).toHaveLength(10);
+        expect(cardTitles()[0]).toBe("Video 22");
+        expect(pagerText()).toEqual({ range: "1–10 of 23 videos", status: "Page 1 of 3" });
+        expect(document.querySelector("#content .pager-prev").disabled).toBe(true);
+
+        await clickPager("next");
+        expect(cardTitles()[0]).toBe("Video 12");
+        expect(pagerText()).toEqual({ range: "11–20 of 23 videos", status: "Page 2 of 3" });
+
+        await clickPager("next");
+        expect(cardTitles()).toEqual(["Video 2", "Video 1", "Video 0"]);
+        expect(pagerText().range).toBe("21–23 of 23 videos");
+        expect(document.querySelector("#content .pager-next").disabled).toBe(true);
+
+        await clickPager("prev");
+        expect(pagerText().status).toBe("Page 2 of 3");
+    });
+
+    it("offers 10, 15 and 25 per page, starts over at page 1 and remembers the choice", async () => {
+        seedManyVideos(30);
+        await renderPage("videos");
+        await showView("all");
+        await clickPager("next");
+
+        const options = [...document.querySelectorAll("#content .pager-size option")].map((o) => o.value);
+        expect(options).toEqual(["10", "15", "25"]);
+        expect(document.querySelector("#content .pager-size select").value).toBe("10");
+
+        await setPageSize(25);
+
+        expect(cardTitles()).toHaveLength(25);
+        expect(pagerText()).toEqual({ range: "1–25 of 30 videos", status: "Page 1 of 2" });
+        expect(window.localStorage.getItem("attention.pageSize")).toBe("25");
+
+        await setPageSize(15);
+        expect(cardTitles()).toHaveLength(15);
+        expect(pagerText().status).toBe("Page 1 of 2");
+    });
+
+    it("hides the pager when everything fits on the smallest page", async () => {
+        seedManyVideos(10);
+        await renderPage("videos");
+        await showView("all");
+
+        expect(cardTitles()).toHaveLength(10);
+        expect(document.querySelector("#content .pager")).toBeNull();
+    });
+
+    it("moves back a page when deleting the last video on the last page", async () => {
+        seedManyVideos(11);
+        await renderPage("videos");
+        await showView("all");
+        await clickPager("next");
+        expect(cardTitles()).toEqual(["Video 0"]);
+
+        document.querySelector("#content .video-card .delete-btn").click();
+        await settle();
+
+        expect(cardTitles()).toHaveLength(10);
+        expect(document.querySelector("#content .pager")).toBeNull();
+    });
+
+    it("pages a playlist's videos", async () => {
+        const videos = seedManyVideos(12);
+        chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify([
+            { id: "favorites", name: "Favorites", videoIds: videos.map((v) => v.id) },
+        ]);
+        await openPlaylistPage("favorites");
+
+        expect(cardTitles()).toHaveLength(10);
+        expect(pagerText()).toEqual({ range: "1–10 of 12 videos", status: "Page 1 of 2" });
+        await clickPager("next");
+        expect(cardTitles()).toEqual(["Video 1", "Video 0"]);
+    });
+
+    it("pages the timestamps page by video", async () => {
+        chrome.__storageData[VIDEOS_KEY] = JSON.stringify([]);
+        for (let i = 0; i < 12; i++) {
+            chrome.__storageData["ts" + i] = JSON.stringify([{ time: i, desc: "Bookmark at " + i }]);
+        }
+        await renderPage("timestamps");
+
+        expect(groupTitles()).toHaveLength(10);
+        expect(pagerText()).toEqual({ range: "1–10 of 12 videos", status: "Page 1 of 2" });
+        await clickPager("next");
+        expect(groupTitles()).toEqual(["ts10", "ts11"]);
+    });
+});
+
+describe("undo after deleting a video", () => {
+    const undoBar = () => document.querySelector(".undo-bar");
+    const deleteCard = async (title) => {
+        [...document.querySelectorAll("#content .video-card")]
+            .find((c) => c.querySelector(".card-title").textContent === title)
+            .querySelector(".delete-btn")
+            .click();
+        await settle();
+    };
+
+    it("deletes immediately (no confirmation) and offers Undo, which restores the video and its playlists", async () => {
+        seedPlaylists(); // vidB is in Favorites and Watch Later
+        const before = { videos: chrome.__storageData[VIDEOS_KEY], playlists: chrome.__storageData[PLAYLISTS_KEY] };
+        await renderPage("videos");
+        const browserConfirm = vi.spyOn(window, "confirm");
+
+        await deleteCard("Second video");
+
+        expect(browserConfirm).not.toHaveBeenCalled();
+        expect(document.querySelector(".modal-backdrop")).toBeNull();
+        expect(cardTitles()).toEqual(["First video"]);
+        expect(undoBar().getAttribute("role")).toBe("status");
+        expect(undoBar().querySelector(".undo-message").textContent).toBe("Video removed");
+
+        undoBar().querySelector(".undo-btn").click();
+        await settle();
+
+        expect(undoBar()).toBeNull();
+        expect(cardTitles()).toEqual(["Second video", "First video"]);
+        expect(chrome.__storageData[VIDEOS_KEY]).toBe(before.videos);
+        expect(chrome.__storageData[PLAYLISTS_KEY]).toBe(before.playlists);
+        browserConfirm.mockRestore();
+    });
+
+    it("the Undo bar disappears after 5 seconds and the deletion stays", async () => {
+        seedStorage();
+        await renderPage("videos");
+        vi.useFakeTimers();
+        try {
+            document.querySelector("#content .video-card .delete-btn").click();
+            await vi.advanceTimersByTimeAsync(4900);
+            expect(undoBar()).not.toBeNull();
+
+            await vi.advanceTimersByTimeAsync(200);
+            expect(undoBar()).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+        expect(JSON.parse(chrome.__storageData[VIDEOS_KEY]).map((v) => v.id)).toEqual(["vidA"]);
+    });
+
+    it("a second deletion replaces the bar; Undo restores only the latest one", async () => {
+        seedStorage();
+        await renderPage("videos");
+
+        await deleteCard("Second video");
+        await deleteCard("First video");
+
+        expect(document.querySelectorAll(".undo-bar")).toHaveLength(1);
+        undoBar().querySelector(".undo-btn").click();
+        await settle();
+
+        expect(cardTitles()).toEqual(["First video"]);
+    });
+
+    it("removing from a playlist page can be undone too", async () => {
+        seedPlaylists();
+        window.history.replaceState({}, "", "/playlist.html?id=watch-later");
+        await renderPage("playlist");
+
+        document.querySelector("#content .video-card .delete-btn").click();
+        await settle();
+        expect(undoBar().querySelector(".undo-message").textContent).toBe("Removed from Watch Later");
+
+        undoBar().querySelector(".undo-btn").click();
+        await settle();
+
+        expect(storedPlaylists().find((p) => p.id === "watch-later").videoIds).toEqual(["vidB"]);
+        expect(cardTitles()).toEqual(["Second video"]);
     });
 });

@@ -38,7 +38,7 @@ test.describe("Bookmarks dashboard", () => {
         await expect(page.locator("#content .card-channel")).toHaveText(["Channel B", "Channel A"]);
 
         const firstVideo = page.locator("#content .video-card", { hasText: "First video" });
-        await expect(firstVideo.locator("a.card-title")).toHaveAttribute("href", "https://www.youtube.com/watch?v=vidA&t=65s");
+        await expect(firstVideo.locator("a.card-title")).toHaveAttribute("href", "https://www.youtube.com/watch?v=vidA");
         const thumb = firstVideo.locator(".thumb img");
         await expect(thumb).toHaveAttribute("src", "https://i.ytimg.com/vi/vidA/mqdefault.jpg");
         await expect.poll(() => thumb.evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
@@ -95,8 +95,8 @@ test.describe("Bookmarks dashboard", () => {
         await expect(deleteBtn).toHaveCSS("color", "rgb(242, 139, 130)");
 
         const meta = page.locator("#content .video-card", { hasText: "First video" }).locator(".card-meta");
-        await expect(meta).toContainText("00:01:05");
-        await expect(meta).not.toContainText("Bookmarked at");
+        // Only the date it was saved; no video timestamp
+        await expect(meta).toHaveText(/^Saved \w+ \d+, \d{4}$/);
     });
 
     test("clicking the 'Attention' brand goes to the bookmarked videos page", async ({ page, extensionId }) => {
@@ -135,18 +135,44 @@ test.describe("Bookmarks dashboard", () => {
         await expect(page.locator("#content a.card-title")).toHaveText(["First video"]);
     });
 
-    test("deleting a bookmarked video updates the list and storage", async ({ page, serviceWorker, extensionId }) => {
+    test("deleting a bookmarked video needs no confirmation and can be undone from a bottom-right bar", async ({
+        page,
+        serviceWorker,
+        extensionId,
+    }) => {
         await seed(serviceWorker);
         await page.goto(pageUrl(extensionId, "videos.html"));
+        const storedIds = () =>
+            serviceWorker.evaluate(async () => {
+                const data = await chrome.storage.sync.get("attention_bookmarked_videos");
+                return JSON.parse(data.attention_bookmarked_videos).map((v) => v.id);
+            });
+        page.on("dialog", () => {
+            throw new Error("No confirmation dialog expected");
+        });
 
         await page.locator("#content .card", { hasText: "Second video" }).locator(".delete-btn").click();
 
         await expect(page.locator("#content a.card-title")).toHaveText(["First video"]);
-        const stored = await serviceWorker.evaluate(async () => {
-            const data = await chrome.storage.sync.get("attention_bookmarked_videos");
-            return JSON.parse(data.attention_bookmarked_videos);
-        });
-        expect(stored.map((v) => v.id)).toEqual(["vidA"]);
+        await expect.poll(storedIds).toEqual(["vidA"]);
+
+        const bar = page.locator(".undo-bar");
+        await expect(bar).toContainText("Video removed");
+        const box = await bar.boundingBox();
+        const viewport = page.viewportSize();
+        expect(box.x + box.width).toBeGreaterThan(viewport.width - 40);
+        expect(box.y + box.height).toBeGreaterThan(viewport.height - 40);
+
+        await bar.getByRole("button", { name: "Undo" }).click();
+        await expect(bar).toHaveCount(0);
+        await expect(page.locator("#content a.card-title")).toHaveText(["Second video", "First video"]);
+        await expect.poll(storedIds).toEqual(["vidA", "vidB"]);
+
+        // Left alone, the bar goes away after 5 seconds and the deletion stays
+        await page.locator("#content .card", { hasText: "First video" }).locator(".delete-btn").click();
+        await expect(bar).toBeVisible();
+        await expect(bar).toHaveCount(0, { timeout: 7000 });
+        await expect.poll(storedIds).toEqual(["vidB"]);
     });
 
     test("videos and playlists sit side by side; a playlist can be created, opened, renamed and deleted", async ({
@@ -154,16 +180,14 @@ test.describe("Bookmarks dashboard", () => {
         serviceWorker,
         extensionId,
     }) => {
-        await serviceWorker.evaluate(
-            (data) => chrome.storage.sync.set(data),
-            {
-                ...seedData,
-                attention_playlists: JSON.stringify([
-                    { id: "favorites", name: "Favorites", videoIds: ["vidA"] },
-                    { id: "watch-later", name: "Watch Later", videoIds: ["vidA", "vidB"] },
-                ]),
-            }
-        );
+        await serviceWorker.evaluate((data) => chrome.storage.sync.set(data), {
+            ...seedData,
+            attention_playlists: JSON.stringify([
+                { id: "favorites", name: "Favorites", videoIds: ["vidA"] },
+                { id: "watch-later", name: "Watch Later", videoIds: ["vidA"] },
+                { id: "pl-old", name: "Old stuff", videoIds: ["vidA", "vidB"] },
+            ]),
+        });
         await page.setViewportSize({ width: 1280, height: 800 });
         await page.goto(pageUrl(extensionId, "videos.html"));
 
@@ -171,36 +195,75 @@ test.describe("Bookmarks dashboard", () => {
         const main = await page.locator("#content .split-main").boundingBox();
         const side = await page.locator("#content .split-side").boundingBox();
         expect(side.x).toBeGreaterThan(main.x + main.width - 1);
-        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later"]);
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later", "Old stuff"]);
         await expect(page.locator("#content .segment")).toHaveText(["Recent", "All (2)"]);
+
+        // The defaults can't be renamed or deleted
+        for (const name of ["Favorites", "Watch Later"]) {
+            await expect(page.getByRole("button", { name: "Delete " + name })).toHaveCount(0);
+            await expect(page.getByRole("button", { name: "Rename " + name })).toHaveCount(0);
+        }
+        await expect(page.locator("#content .default-badge")).toHaveCount(2);
 
         // Create
         await page.getByRole("button", { name: "New playlist" }).click();
         await page.getByLabel("Playlist name").fill("Lectures");
         await page.getByLabel("Playlist name").press("Enter");
-        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later", "Lectures"]);
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later", "Old stuff", "Lectures"]);
 
         // Rename
-        await page.getByRole("button", { name: "Rename Watch Later" }).click();
-        await page.getByLabel("Playlist name").fill("Queue");
+        await page.getByRole("button", { name: "Rename Old stuff" }).click();
+        await page.getByLabel("Playlist name").fill("Archive");
         await page.getByRole("button", { name: "Save" }).click();
-        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Queue", "Lectures"]);
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later", "Archive", "Lectures"]);
 
         // Open a playlist page
-        await page.locator("#content a.playlist-name", { hasText: "Queue" }).click();
-        await expect(page).toHaveURL(pageUrl(extensionId, "playlist.html?id=watch-later"));
-        await expect(page.locator("#content .playlist-title")).toHaveText("Queue");
+        await page.locator("#content a.playlist-name", { hasText: "Archive" }).click();
+        await expect(page).toHaveURL(pageUrl(extensionId, "playlist.html?id=pl-old"));
+        await expect(page.locator("#content .playlist-title")).toHaveText("Archive");
         await expect(page.locator("#content a.card-title")).toHaveText(["Second video", "First video"]);
 
-        // Delete it from its page: vidB is only in this playlist, so it goes too
-        page.once("dialog", (dialog) => {
-            expect(dialog.message()).toContain("1 video that is not in any other playlist");
-            dialog.accept();
+        // Delete it from its page through the confirmation modal (no browser dialog)
+        page.on("dialog", () => {
+            throw new Error("The browser's confirm() should not be used");
         });
-        await page.getByRole("button", { name: "Delete Queue" }).click();
+        await page.getByRole("button", { name: "Delete Archive" }).click();
+        const modal = page.getByRole("alertdialog", { name: 'Delete "Archive"?' });
+        await expect(modal).toBeVisible();
+        await expect(modal).toContainText("1 video that is not in any other playlist");
+        await expect(modal.getByRole("button", { name: "Cancel" })).toBeFocused();
+        await modal.getByRole("button", { name: "Delete playlist" }).click();
+
+        // vidB was only in this playlist, so its bookmark goes too
         await expect(page).toHaveURL(pageUrl(extensionId, "videos.html"));
-        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Lectures"]);
+        await expect(page.locator("#content .playlist-name")).toHaveText(["Favorites", "Watch Later", "Lectures"]);
         await expect(page.locator("#content a.card-title")).toHaveText(["First video"]);
+    });
+
+    test("the All tab pages through videos, 10 per page by default", async ({ page, serviceWorker, extensionId }) => {
+        await serviceWorker.evaluate(() => {
+            const videos = Array.from({ length: 27 }, (_, i) => ({ id: "v" + i, title: "Video " + i, time: 0, savedAt: 1000 + i }));
+            return chrome.storage.sync.set({ attention_bookmarked_videos: JSON.stringify(videos) });
+        });
+        await page.goto(pageUrl(extensionId, "videos.html"));
+        await page.getByRole("tab", { name: "All (27)" }).click();
+
+        const pager = page.getByRole("navigation", { name: "Pagination" });
+        await expect(page.locator("#content a.card-title")).toHaveCount(10);
+        await expect(pager).toContainText("1–10 of 27 videos");
+
+        await pager.getByRole("button", { name: "Next ›" }).click();
+        await expect(pager).toContainText("Page 2 of 3");
+        await expect(page.locator("#content a.card-title").first()).toHaveText("Video 16");
+
+        await pager.getByLabel("Per page").selectOption("25");
+        await expect(page.locator("#content a.card-title")).toHaveCount(25);
+        await expect(pager).toContainText("Page 1 of 2");
+
+        // The choice is remembered on the next visit
+        await page.reload();
+        await page.getByRole("tab", { name: "All (27)" }).click();
+        await expect(page.locator("#content a.card-title")).toHaveCount(25);
     });
 
     test("shows empty states when nothing is bookmarked", async ({ page, extensionId }) => {

@@ -37,11 +37,69 @@ describe("default playlists", () => {
         expect(storedPlaylists().map((p) => p.name)).toEqual(["Favorites", "Watch Later"]);
     });
 
-    it("does not bring the defaults back after the user deleted every playlist", async () => {
-        await STORE.deletePlaylist("favorites");
-        await STORE.deletePlaylist("watch-later");
+    it("Favorites and Watch Later cannot be deleted", async () => {
+        await STORE.addVideoToPlaylist(video("a"), "favorites");
 
-        expect((await STORE.loadLibrary()).playlists).toEqual([]);
+        await expect(STORE.deletePlaylist("favorites")).rejects.toThrow('"Favorites" can\'t be deleted');
+        await expect(STORE.deletePlaylist("watch-later")).rejects.toThrow('"Watch Later" can\'t be deleted');
+
+        expect(storedPlaylists().map((p) => p.id)).toEqual(["favorites", "watch-later"]);
+        expect(storedVideos().map((v) => v.id)).toEqual(["a"]);
+        expect(STORE.isProtected("favorites")).toBe(true);
+        expect(STORE.isProtected("watch-later")).toBe(true);
+        expect(STORE.isProtected("pl-anything")).toBe(false);
+    });
+
+    it("Favorites and Watch Later cannot be renamed", async () => {
+        await expect(STORE.renamePlaylist("favorites", "Best")).rejects.toThrow('"Favorites" can\'t be renamed');
+        await expect(STORE.renamePlaylist("watch-later", "Queue")).rejects.toThrow('"Watch Later" can\'t be renamed');
+        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+    });
+
+    it("but videos can still be added to and removed from them", async () => {
+        await STORE.addVideoToPlaylist(video("a"), "favorites");
+        await STORE.addVideoToPlaylist(video("a"), "watch-later");
+        await STORE.removeVideoFromPlaylist("a", "favorites");
+
+        expect(storedPlaylists().map((p) => p.videoIds)).toEqual([[], ["a"]]);
+    });
+
+    it("restores the fixed names of defaults renamed by an older version", async () => {
+        seed({
+            playlists: [
+                { id: "favorites", name: "Best", videoIds: ["a"] },
+                { id: "watch-later", name: "Queue", videoIds: [] },
+            ],
+        });
+
+        const { playlists } = await STORE.loadLibrary();
+
+        expect(playlists).toEqual([
+            { id: "favorites", name: "Favorites", videoIds: ["a"] },
+            { id: "watch-later", name: "Watch Later", videoIds: [] },
+        ]);
+    });
+
+    it("renames a custom playlist that took a default's name while the default was renamed", async () => {
+        seed({
+            playlists: [
+                { id: "favorites", name: "Best", videoIds: [] },
+                { id: "watch-later", name: "Watch Later", videoIds: [] },
+                { id: "p1", name: "favorites", videoIds: [] },
+            ],
+        });
+
+        const { playlists } = await STORE.loadLibrary();
+
+        expect(playlists.map((p) => p.name)).toEqual(["Favorites", "Watch Later", "favorites (custom)"]);
+    });
+
+    it("restores a default deleted by an older version, at its usual position", async () => {
+        seed({ playlists: [{ id: "favorites", name: "Favorites", videoIds: [] }, { id: "p1", name: "Mine", videoIds: [] }] });
+
+        const { playlists } = await STORE.loadLibrary();
+
+        expect(playlists.map((p) => p.id)).toEqual(["favorites", "watch-later", "p1"]);
     });
 
     it("keeps bookmarks made before playlists existed", async () => {
@@ -57,7 +115,9 @@ describe("default playlists", () => {
         chrome.__storageData[VIDEOS_KEY] = "{not json";
         chrome.__storageData[PLAYLISTS_KEY] = JSON.stringify({ not: "a list" });
 
-        expect(await STORE.loadLibrary()).toEqual({ videos: [], playlists: [] });
+        const { videos, playlists } = await STORE.loadLibrary();
+        expect(videos).toEqual([]);
+        expect(playlists.map((p) => p.id)).toEqual(["favorites", "watch-later"]);
     });
 });
 
@@ -89,17 +149,19 @@ describe("creating and renaming playlists", () => {
         expect(chrome.storage.sync.set).not.toHaveBeenCalled();
     });
 
-    it("renames a playlist, allowing a change of case of its own name", async () => {
-        await STORE.renamePlaylist("watch-later", "watch later");
-        expect(storedPlaylists().find((p) => p.id === "watch-later").name).toBe("watch later");
+    it("renames a custom playlist, allowing a change of case of its own name", async () => {
+        const { id } = await STORE.createPlaylist("Music");
+        await STORE.renamePlaylist(id, "music");
+        expect(storedPlaylists().find((p) => p.id === id).name).toBe("music");
 
-        await STORE.renamePlaylist("watch-later", "Queue");
-        expect(storedPlaylists().find((p) => p.id === "watch-later").name).toBe("Queue");
+        await STORE.renamePlaylist(id, "Queue");
+        expect(storedPlaylists().find((p) => p.id === id).name).toBe("Queue");
     });
 
     it("rejects renaming to another playlist's name or to nothing", async () => {
-        await expect(STORE.renamePlaylist("watch-later", "favorites")).rejects.toThrow("already exists");
-        await expect(STORE.renamePlaylist("watch-later", " ")).rejects.toThrow("Enter a playlist name");
+        const { id } = await STORE.createPlaylist("Music");
+        await expect(STORE.renamePlaylist(id, "favorites")).rejects.toThrow("already exists");
+        await expect(STORE.renamePlaylist(id, " ")).rejects.toThrow("Enter a playlist name");
     });
 
     it("reports a playlist that no longer exists", async () => {
@@ -124,7 +186,7 @@ describe("saving videos to playlists", () => {
 
         const result = await STORE.removeVideoFromPlaylist("a", "favorites");
 
-        expect(result).toEqual({ removedBookmark: false });
+        expect(result.removedBookmark).toBe(false);
         expect(storedVideos().map((v) => v.id)).toEqual(["a"]);
     });
 
@@ -134,7 +196,7 @@ describe("saving videos to playlists", () => {
 
         const result = await STORE.removeVideoFromPlaylist("a", "favorites");
 
-        expect(result).toEqual({ removedBookmark: true });
+        expect(result.removedBookmark).toBe(true);
         expect(storedVideos().map((v) => v.id)).toEqual(["b"]);
     });
 
@@ -184,18 +246,21 @@ describe("deleting a playlist", () => {
         const result = await STORE.deletePlaylist("p1");
 
         expect(result).toEqual({ removedVideoIds: ["only"] });
-        expect(storedPlaylists()).toEqual([{ id: "p2", name: "Two", videoIds: ["shared", "elsewhere"] }]);
+        expect(storedPlaylists().find((p) => p.id === "p1")).toBeUndefined();
+        expect(storedPlaylists().find((p) => p.id === "p2")).toEqual({ id: "p2", name: "Two", videoIds: ["shared", "elsewhere"] });
         // "legacy" was bookmarked before playlists and is not touched
         expect(storedVideos().map((v) => v.id)).toEqual(["shared", "elsewhere", "legacy"]);
     });
 
-    it("works for the default playlists too", async () => {
-        await STORE.addVideoToPlaylist(video("a"), "favorites");
+    it("counts the default playlists as 'another playlist' when deleting a custom one", async () => {
+        const custom = await STORE.createPlaylist("Custom");
+        await STORE.addVideoToPlaylist(video("a"), custom.id);
+        await STORE.addVideoToPlaylist(video("a"), "watch-later");
 
-        await STORE.deletePlaylist("favorites");
+        await STORE.deletePlaylist(custom.id);
 
-        expect(storedPlaylists().map((p) => p.id)).toEqual(["watch-later"]);
-        expect(storedVideos()).toEqual([]);
+        expect(storedVideos().map((v) => v.id)).toEqual(["a"]);
+        expect(storedPlaylists().map((p) => p.id)).toEqual(["favorites", "watch-later"]);
     });
 
     it("playlistsContaining lists every playlist a video is in", async () => {
@@ -205,5 +270,81 @@ describe("deleting a playlist", () => {
         const library = await STORE.loadLibrary();
         expect(STORE.playlistsContaining(library, "a").map((p) => p.id)).toEqual(["favorites", "watch-later"]);
         expect(STORE.playlistsContaining(library, "zzz")).toEqual([]);
+    });
+});
+
+describe("cleaning video titles", () => {
+    it.each([
+        ["(1) Big Buck Bunny", "Big Buck Bunny"],
+        ["(12) Big Buck Bunny", "Big Buck Bunny"],
+        ["(99+) Big Buck Bunny", "Big Buck Bunny"],
+        ["(2024) Year in review", "(2024) Year in review"],
+        ["Big Buck Bunny (1)", "Big Buck Bunny (1)"],
+        [undefined, ""],
+    ])("cleanTitle(%j) is %j", (input, expected) => {
+        expect(STORE.cleanTitle(input)).toBe(expected);
+    });
+
+    it("strips the notification count from titles saved by earlier versions", async () => {
+        seed({ videos: [video("a", { title: "(3) Some talk" })] });
+
+        expect((await STORE.loadLibrary()).videos[0].title).toBe("Some talk");
+    });
+});
+
+describe("undoing a removal", () => {
+    it("restoreVideo puts a removed video back in its bookmark slot and in every playlist at its position", async () => {
+        const custom = await STORE.createPlaylist("Custom");
+        await STORE.addVideoToPlaylist(video("x"), "favorites");
+        await STORE.addVideoToPlaylist(video("a"), "favorites");
+        await STORE.addVideoToPlaylist(video("y"), "favorites");
+        await STORE.addVideoToPlaylist(video("a"), custom.id);
+        const before = { videos: storedVideos(), playlists: storedPlaylists() };
+
+        const snapshot = await STORE.removeVideo("a");
+        expect(storedVideos().map((v) => v.id)).toEqual(["x", "y"]);
+
+        await STORE.restoreVideo(snapshot);
+
+        expect(storedVideos()).toEqual(before.videos);
+        expect(storedPlaylists()).toEqual(before.playlists);
+    });
+
+    it("undoes removing a video from one playlist, including its dropped bookmark", async () => {
+        await STORE.addVideoToPlaylist(video("a"), "watch-later");
+        await STORE.addVideoToPlaylist(video("b"), "watch-later");
+
+        const { removedBookmark, snapshot } = await STORE.removeVideoFromPlaylist("a", "watch-later");
+        expect(removedBookmark).toBe(true);
+
+        await STORE.restoreVideo(snapshot);
+
+        expect(storedVideos().map((v) => v.id)).toEqual(["a", "b"]);
+        expect(storedPlaylists().find((p) => p.id === "watch-later").videoIds).toEqual(["a", "b"]);
+    });
+
+    it("only restores the playlist it was removed from when it is still in others", async () => {
+        await STORE.addVideoToPlaylist(video("a"), "favorites");
+        await STORE.addVideoToPlaylist(video("a"), "watch-later");
+
+        const { snapshot } = await STORE.removeVideoFromPlaylist("a", "favorites");
+        await STORE.restoreVideo(snapshot);
+
+        expect(storedVideos().map((v) => v.id)).toEqual(["a"]);
+        expect(storedPlaylists().map((p) => p.videoIds)).toEqual([["a"], ["a"]]);
+    });
+
+    it("skips playlists deleted in the meantime and never duplicates", async () => {
+        const custom = await STORE.createPlaylist("Custom");
+        await STORE.addVideoToPlaylist(video("a"), custom.id);
+        await STORE.addVideoToPlaylist(video("a"), "favorites");
+        const snapshot = await STORE.removeVideo("a");
+
+        await STORE.deletePlaylist(custom.id);
+        await STORE.addVideoToPlaylist(video("a"), "favorites"); // re-saved before undo
+        await STORE.restoreVideo(snapshot);
+
+        expect(storedVideos().map((v) => v.id)).toEqual(["a"]);
+        expect(storedPlaylists().map((p) => p.videoIds)).toEqual([["a"], []]);
     });
 });

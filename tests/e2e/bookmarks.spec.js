@@ -78,9 +78,14 @@ test.describe("YouTube timestamp bookmarks", () => {
         await name.pressSequentially("Kids films");
         await name.press("Enter");
 
-        await expect(page.locator(".attention-toast")).toHaveText("Saved to Kids films");
+        // Creating closes the panel with a confirmation
+        await expect(page.locator(".attention-toast")).toHaveText('Bookmarked and playlist "Kids films" created');
+        await expect(dialog).toHaveCount(0);
+
+        await page.locator(".video-bookmark-btn").click();
         await expect(dialog.getByLabel("Kids films")).toBeChecked();
         await expect(dialog.getByLabel("Favorites")).toBeChecked();
+        await expect(dialog.getByRole("button", { name: "Remove from all" })).toBeVisible();
 
         const playlists = await storage(serviceWorker, "attention_playlists");
         expect(playlists.filter((p) => p.videoIds.includes("vid-multi")).map((p) => p.name)).toEqual([

@@ -492,7 +492,7 @@ describe("bookmarks on a watch page", () => {
         expect(storedVideos().map((v) => v.id)).toEqual(["older", "vid9"]);
     });
 
-    it("creates a new playlist from the panel and saves the video to it", async () => {
+    it("creating a new playlist saves the video to it, closes the panel and confirms", async () => {
         const { controls } = setupPlayer();
         await loadVideo("vid-new-pl");
         await openPanel(controls);
@@ -505,9 +505,13 @@ describe("bookmarks on a watch page", () => {
         expect(created).toBeDefined();
         expect(created.videoIds).toEqual(["vid-new-pl"]);
         expect(storedVideos().map((v) => v.id)).toEqual(["vid-new-pl"]);
-        expect(toastText()).toBe("Saved to Study notes");
-        // Back to the list, with the new playlist checked
-        expect(panel().querySelector(".attention-new-playlist-form")).toBeNull();
+        expect(toastText()).toBe('Bookmarked and playlist "Study notes" created');
+        expect(panel()).toBeNull();
+        expect(controls.querySelector(".video-bookmark-btn").getAttribute("aria-expanded")).toBe("false");
+        expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+
+        // Reopening shows the new playlist checked
+        await openPanel(controls);
         expect(checkbox(created.id).checked).toBe(true);
     });
 
@@ -549,20 +553,22 @@ describe("bookmarks on a watch page", () => {
         expect(chrome.__storageData.attention_playlists).toBeUndefined();
     });
 
-    it("Remove bookmark takes the video out of every playlist and closes the panel", async () => {
+    it("Remove from all takes the video out of every playlist and closes the panel", async () => {
         const { controls } = setupPlayer();
         await loadVideo("vid-remove-all");
         await openPanel(controls);
         await toggle("favorites");
         await toggle("watch-later");
 
-        panel().querySelector(".attention-remove-bookmark").click();
+        const removeAll = panel().querySelector(".attention-remove-bookmark");
+        expect(removeAll.textContent).toBe("Remove from all");
+        removeAll.click();
         await flushPromises();
 
         expect(storedVideos()).toEqual([]);
         expect(storedPlaylists().every((p) => p.videoIds.length === 0)).toBe(true);
         expect(panel()).toBeNull();
-        expect(toastText()).toBe("Video bookmark removed");
+        expect(toastText()).toBe("Removed from all playlists");
         expect(videoButtonIcon(controls)).toBe("videoBookmark");
     });
 
@@ -629,18 +635,45 @@ describe("bookmarks on a watch page", () => {
         document.removeEventListener("click", pageClick);
     });
 
-    it("an open panel updates when playlists change elsewhere (e.g. renamed on the dashboard)", async () => {
+    it("an open panel updates when playlists change elsewhere (e.g. created on the dashboard)", async () => {
         const { controls } = setupPlayer();
         await loadVideo("vid-live");
         await openPanel(controls);
 
-        await ATTENTION_STORE.renamePlaylist("watch-later", "Queue");
+        await ATTENTION_STORE.createPlaylist("Queue");
         await flushPromises();
 
         expect([...panel().querySelectorAll(".attention-playlist-name")].map((n) => n.textContent)).toEqual([
             "Favorites",
+            "Watch Later",
             "Queue",
         ]);
+    });
+
+    it("saves the title without YouTube's notification count", async () => {
+        const { controls } = setupPlayer();
+        document.title = "(4) Counted Video - YouTube";
+        await loadVideo("vid-count");
+        await openPanel(controls);
+
+        await toggle("favorites");
+
+        expect(storedVideos()[0].title).toBe("Counted Video");
+    });
+
+    it("prefers the title shown on the watch page", async () => {
+        const { controls } = setupPlayer();
+        document.title = "(4) Tab title - YouTube";
+        document.body.insertAdjacentHTML(
+            "beforeend",
+            "<ytd-watch-metadata><h1><yt-formatted-string> Page heading </yt-formatted-string></h1></ytd-watch-metadata>"
+        );
+        await loadVideo("vid-heading");
+        await openPanel(controls);
+
+        await toggle("favorites");
+
+        expect(storedVideos()[0].title).toBe("Page heading");
     });
 
     it("marks the player while the panel is open so the toast moves out from behind it", async () => {

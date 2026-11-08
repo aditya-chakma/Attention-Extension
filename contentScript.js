@@ -151,7 +151,13 @@
         });
     };
 
-    const getVideoTitle = () => document.title.replace(/ - YouTube$/, "").trim();
+    // Prefer the title shown on the page; the tab title carries YouTube's
+    // notification count ("(1) Video name - YouTube"), stripped as a fallback
+    const getVideoTitle = () => {
+        const heading = document.querySelector("ytd-watch-metadata h1 yt-formatted-string, h1.ytd-watch-metadata");
+        const fromPage = heading && heading.textContent.trim();
+        return fromPage || STORE.cleanTitle(document.title.replace(/ - YouTube$/, "").trim());
+    };
 
     const getChannelName = () => {
         const link = document.querySelector(
@@ -430,7 +436,7 @@
         saveDialog.append(header, list, renderNewPlaylistSection());
 
         if (library.videos.some((v) => v.id === videoId)) {
-            const remove = el("button", "attention-remove-bookmark", "Remove bookmark");
+            const remove = el("button", "attention-remove-bookmark", "Remove from all");
             remove.type = "button";
             remove.addEventListener("click", onRemoveBookmark);
             saveDialog.appendChild(remove);
@@ -513,18 +519,19 @@
     const onCreatePlaylist = async () => {
         try {
             const playlist = await STORE.createPlaylist(dialogState.name, currentVideoEntry());
-            dialogState = { creating: false, name: "", error: "" };
-            showToast("Saved to " + playlist.name);
+            closeSaveDialog();
+            showToast(`Bookmarked and playlist "${playlist.name}" created`);
         } catch (error) {
+            // Keep the panel open with what was typed and show why
             dialogState.error = error.message;
+            await renderSaveDialog();
         }
-        await renderSaveDialog();
     };
 
     const onRemoveBookmark = async () => {
         await STORE.removeVideo(currentVideo);
         closeSaveDialog();
-        showToast("Video bookmark removed");
+        showToast("Removed from all playlists");
     };
 
     // YouTube is an SPA: react to its own navigation event instead of waiting for
