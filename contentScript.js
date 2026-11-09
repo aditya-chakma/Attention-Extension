@@ -121,7 +121,7 @@
             return false;
         } else if (type === "DELETE") {
             currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != value);
-            chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) }, () => {
+            chrome.storage.local.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) }, () => {
                 response(currentVideoBookmarks);
             });
             return true;
@@ -131,7 +131,7 @@
 
     const fetchBookmarks = () => {
         return new Promise((resolve) => {
-            chrome.storage.sync.get([currentVideo], (obj) => {
+            chrome.storage.local.get([currentVideo], (obj) => {
                 resolve(obj[currentVideo] ? JSON.parse(obj[currentVideo]) : []);
             });
         });
@@ -145,7 +145,7 @@
 
     const fetchStoredJSON = (key, fallback) => {
         return new Promise((resolve) => {
-            chrome.storage.sync.get([key], (obj) => {
+            chrome.storage.local.get([key], (obj) => {
                 resolve(obj[key] ? JSON.parse(obj[key]) : fallback);
             });
         });
@@ -282,7 +282,7 @@
         titles[videoId] = getVideoTitle();
 
         await new Promise((resolve) =>
-            chrome.storage.sync.set(
+            chrome.storage.local.set(
                 {
                     [videoId]: JSON.stringify([...bookmarks, newBookmark].sort((a, b) => a.time - b.time)),
                     [TITLES_KEY]: JSON.stringify(titles),
@@ -557,7 +557,7 @@
         // Keeps the bookmark icon and an open panel in sync with saves from the
         // panel and with changes made on the dashboard (possibly in another tab)
         chrome.storage.onChanged.addListener((changes, area) => {
-            if (area !== "sync") return;
+            if (area !== "local") return;
             if (STORE.VIDEOS_KEY in changes) {
                 const { newValue } = changes[STORE.VIDEOS_KEY];
                 renderVideoBookmarkState(newValue ? JSON.parse(newValue) : []);

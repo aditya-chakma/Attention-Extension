@@ -157,8 +157,8 @@ describe("real-time sync", () => {
         await renderPage("videos");
         expect(cardTitles()).toEqual(["Second video", "First video"]);
 
-        // Simulate the player button in a YouTube tab writing to sync storage
-        chrome.storage.sync.set({
+        // Simulate the player button in a YouTube tab writing to local storage
+        chrome.storage.local.set({
             [VIDEOS_KEY]: JSON.stringify([
                 ...JSON.parse(chrome.__storageData[VIDEOS_KEY]),
                 { id: "vidNew", title: "Brand new", channel: "C", time: 3, savedAt: 1900000000000 },
@@ -174,7 +174,7 @@ describe("real-time sync", () => {
         await renderPage("timestamps");
         expect(groupTitles()).toEqual(["First video", "vidC"]);
 
-        chrome.storage.sync.set({ vidD: JSON.stringify([{ time: 1, desc: "Bookmark at 00:00:01" }]) });
+        chrome.storage.local.set({ vidD: JSON.stringify([{ time: 1, desc: "Bookmark at 00:00:01" }]) });
         await flushPromises();
 
         expect(groupTitles()).toEqual(["First video", "vidC", "vidD"]);
@@ -183,12 +183,13 @@ describe("real-time sync", () => {
     it("ignores changes in other storage areas", async () => {
         seedStorage();
         await renderPage("videos");
-        const readsBefore = chrome.storage.sync.get.mock.calls.length;
+        const readsBefore = chrome.storage.local.get.mock.calls.length;
 
-        for (const listener of chrome.__storageChangedListeners) listener({ foo: { newValue: 1 } }, "local");
+        // Settings live in sync storage; the dashboard only shows bookmarks
+        for (const listener of chrome.__storageChangedListeners) listener({ foo: { newValue: 1 } }, "sync");
         await flushPromises();
 
-        expect(chrome.storage.sync.get.mock.calls.length).toBe(readsBefore);
+        expect(chrome.storage.local.get.mock.calls.length).toBe(readsBefore);
     });
 
     it("registers a single storage listener for the module", () => {
@@ -480,7 +481,7 @@ describe("managing playlists on the dashboard", () => {
         typeInto(document.querySelector("#content .inline-form input"), "Half typed");
 
         // e.g. a video saved from a YouTube tab
-        chrome.storage.sync.set({ attention_video_titles: JSON.stringify({}) });
+        chrome.storage.local.set({ attention_video_titles: JSON.stringify({}) });
         await settle();
 
         const input = document.querySelector("#content .inline-form input");
@@ -575,7 +576,7 @@ describe("managing playlists on the dashboard", () => {
 
         expect(modal()).toBeNull();
         expect(playlistNames()).toEqual(["Favorites", "Watch Later", "Old stuff"]);
-        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
     });
 
     it("a click inside the modal does not dismiss it, and Tab keeps focus inside", async () => {

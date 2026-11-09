@@ -6,7 +6,8 @@
  * (see manifest.json) and via `import "./bookmarkStore.js"` from extension
  * pages. Publishes globalThis.ATTENTION_STORE.
  *
- * Storage (chrome.storage.sync, JSON strings):
+ * Storage (chrome.storage.local, JSON strings; bookmark data is kept per
+ * device because syncing video details would exceed the sync quota):
  *  - attention_bookmarked_videos: [{ id, title, channel, time, savedAt }]
  *    details of every bookmarked video
  *  - attention_playlists: [{ id, name, videoIds: [videoId, ...] }]
@@ -38,8 +39,8 @@
     // 1-2 digits (or "99+") only, so titles like "(2024) Recap" are kept.
     const cleanTitle = (title) => String(title ?? "").replace(/^\(\d{1,2}\+?\)\s+/, "");
 
-    const getItems = (keys) => new Promise((resolve) => chrome.storage.sync.get(keys, resolve));
-    const setItems = (items) => new Promise((resolve) => chrome.storage.sync.set(items, resolve));
+    const getItems = (keys) => new Promise((resolve) => chrome.storage.local.get(keys, resolve));
+    const setItems = (items) => new Promise((resolve) => chrome.storage.local.set(items, resolve));
 
     const parse = (raw, fallback) => {
         if (!raw) return fallback;

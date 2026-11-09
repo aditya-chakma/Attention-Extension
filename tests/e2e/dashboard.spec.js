@@ -14,7 +14,7 @@ const seedData = {
 };
 
 test.describe("Bookmarks dashboard", () => {
-    const seed = (serviceWorker) => serviceWorker.evaluate((data) => chrome.storage.sync.set(data), seedData);
+    const seed = (serviceWorker) => serviceWorker.evaluate((data) => chrome.storage.local.set(data), seedData);
     const pageUrl = (extensionId, file) => `chrome-extension://${extensionId}/${file}`;
 
     test("videos page is dark themed and marks its tab as current", async ({ page, serviceWorker, extensionId }) => {
@@ -116,17 +116,17 @@ test.describe("Bookmarks dashboard", () => {
 
         // Another context (e.g. the player button in a YouTube tab) adds a video
         await serviceWorker.evaluate(async () => {
-            const data = await chrome.storage.sync.get("attention_bookmarked_videos");
+            const data = await chrome.storage.local.get("attention_bookmarked_videos");
             const videos = JSON.parse(data.attention_bookmarked_videos);
             videos.push({ id: "vidLive", title: "Live added", channel: "Live", time: 1, savedAt: 1900000000000 });
-            await chrome.storage.sync.set({ attention_bookmarked_videos: JSON.stringify(videos) });
+            await chrome.storage.local.set({ attention_bookmarked_videos: JSON.stringify(videos) });
         });
 
         await expect(page.locator("#content a.card-title")).toHaveText(["Live added", "Second video", "First video"]);
 
         // And a removal disappears without a reload too
         await serviceWorker.evaluate(() =>
-            chrome.storage.sync.set({
+            chrome.storage.local.set({
                 attention_bookmarked_videos: JSON.stringify([
                     { id: "vidA", title: "First video", channel: "Channel A", time: 65, savedAt: 1700000000000 },
                 ]),
@@ -144,7 +144,7 @@ test.describe("Bookmarks dashboard", () => {
         await page.goto(pageUrl(extensionId, "videos.html"));
         const storedIds = () =>
             serviceWorker.evaluate(async () => {
-                const data = await chrome.storage.sync.get("attention_bookmarked_videos");
+                const data = await chrome.storage.local.get("attention_bookmarked_videos");
                 return JSON.parse(data.attention_bookmarked_videos).map((v) => v.id);
             });
         page.on("dialog", () => {
@@ -180,7 +180,7 @@ test.describe("Bookmarks dashboard", () => {
         serviceWorker,
         extensionId,
     }) => {
-        await serviceWorker.evaluate((data) => chrome.storage.sync.set(data), {
+        await serviceWorker.evaluate((data) => chrome.storage.local.set(data), {
             ...seedData,
             attention_playlists: JSON.stringify([
                 { id: "favorites", name: "Favorites", videoIds: ["vidA"] },
@@ -243,7 +243,7 @@ test.describe("Bookmarks dashboard", () => {
     test("the All tab pages through videos, 10 per page by default", async ({ page, serviceWorker, extensionId }) => {
         await serviceWorker.evaluate(() => {
             const videos = Array.from({ length: 27 }, (_, i) => ({ id: "v" + i, title: "Video " + i, time: 0, savedAt: 1000 + i }));
-            return chrome.storage.sync.set({ attention_bookmarked_videos: JSON.stringify(videos) });
+            return chrome.storage.local.set({ attention_bookmarked_videos: JSON.stringify(videos) });
         });
         await page.goto(pageUrl(extensionId, "videos.html"));
         await page.getByRole("tab", { name: "All (27)" }).click();

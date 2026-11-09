@@ -1,7 +1,7 @@
 import { test, expect } from "./extension.js";
 
 test.describe("YouTube timestamp bookmarks", () => {
-    test("bookmark button is added to the player and stores timestamps in sync storage", async ({
+    test("bookmark button is added to the player and stores timestamps in local storage", async ({
         page,
         serviceWorker,
     }) => {
@@ -19,7 +19,7 @@ test.describe("YouTube timestamp bookmarks", () => {
 
         await expect
             .poll(async () => {
-                const data = await serviceWorker.evaluate(() => chrome.storage.sync.get("e2e-video"));
+                const data = await serviceWorker.evaluate(() => chrome.storage.local.get("e2e-video"));
                 return data["e2e-video"] ? JSON.parse(data["e2e-video"]) : null;
             })
             .toEqual([
@@ -30,7 +30,7 @@ test.describe("YouTube timestamp bookmarks", () => {
 
     const storage = (serviceWorker, key) =>
         serviceWorker.evaluate(async (k) => {
-            const data = await chrome.storage.sync.get(k);
+            const data = await chrome.storage.local.get(k);
             return data[k] ? JSON.parse(data[k]) : null;
         }, key);
 
@@ -134,7 +134,7 @@ test.describe("YouTube timestamp bookmarks", () => {
         await button.click();
         await expect(page.locator(".attention-toast")).toHaveText("Already bookmarked at 00:01:05");
 
-        const data = await serviceWorker.evaluate(() => chrome.storage.sync.get("vid-dup"));
+        const data = await serviceWorker.evaluate(() => chrome.storage.local.get("vid-dup"));
         expect(JSON.parse(data["vid-dup"])).toEqual([{ time: 65, desc: "Bookmark at 00:01:05" }]);
     });
 

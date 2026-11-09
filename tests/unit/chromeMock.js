@@ -3,13 +3,62 @@ import { vi } from "vitest";
 /**
  * Minimal in-memory mock of the chrome.* APIs used by the extension.
  * Listeners registered via addListener are kept in __messageListeners /
- * __tabUpdatedListeners so tests can invoke them directly.
+ * __tabUpdatedListeners / __installedListeners so tests can invoke them directly.
+ *
+ * Both storage areas are modeled. Bookmarks live in `local` (exposed as
+ * __storageData, which most tests seed and inspect); settings live in `sync`
+ * (exposed as __syncData). Like Chrome, get/set/remove accept a callback or,
+ * without one, return a Promise.
  */
 export function createChromeMock() {
-    const storageData = {};
     const messageListeners = [];
     const tabUpdatedListeners = [];
+    const installedListeners = [];
     const storageChangedListeners = [];
+
+    const createArea = (areaName, data) => ({
+        get: vi.fn((keys, callback) => {
+            let result;
+            if (keys === null || keys === undefined) {
+                result = { ...data };
+            } else {
+                const keyList = Array.isArray(keys) ? keys : [keys];
+                result = {};
+                for (const key of keyList) {
+                    if (key in data) result[key] = data[key];
+                }
+            }
+            if (callback) callback(result);
+            return Promise.resolve(result);
+        }),
+        set: vi.fn((items, callback) => {
+            const changes = {};
+            for (const [key, value] of Object.entries(items)) {
+                changes[key] = { oldValue: data[key], newValue: value };
+                data[key] = value;
+            }
+            if (callback) callback();
+            // Like Chrome, notify every context (including the writer) of the change
+            for (const fn of storageChangedListeners) fn(changes, areaName);
+            return Promise.resolve();
+        }),
+        remove: vi.fn((keys, callback) => {
+            const changes = {};
+            for (const key of Array.isArray(keys) ? keys : [keys]) {
+                if (!(key in data)) continue;
+                changes[key] = { oldValue: data[key] };
+                delete data[key];
+            }
+            if (callback) callback();
+            if (Object.keys(changes).length > 0) {
+                for (const fn of storageChangedListeners) fn(changes, areaName);
+            }
+            return Promise.resolve();
+        }),
+    });
+
+    const localData = {};
+    const syncData = {};
 
     const chrome = {
         runtime: {
@@ -17,32 +66,13 @@ export function createChromeMock() {
             onMessage: {
                 addListener: vi.fn((fn) => messageListeners.push(fn)),
             },
+            onInstalled: {
+                addListener: vi.fn((fn) => installedListeners.push(fn)),
+            },
         },
         storage: {
-            sync: {
-                get: vi.fn((keys, callback) => {
-                    if (keys === null || keys === undefined) {
-                        callback({ ...storageData });
-                        return;
-                    }
-                    const keyList = Array.isArray(keys) ? keys : [keys];
-                    const result = {};
-                    for (const key of keyList) {
-                        if (key in storageData) result[key] = storageData[key];
-                    }
-                    callback(result);
-                }),
-                set: vi.fn((items, callback) => {
-                    const changes = {};
-                    for (const [key, value] of Object.entries(items)) {
-                        changes[key] = { oldValue: storageData[key], newValue: value };
-                        storageData[key] = value;
-                    }
-                    if (callback) callback();
-                    // Like Chrome, notify every context (including the writer) of the change
-                    for (const fn of storageChangedListeners) fn(changes, "sync");
-                }),
-            },
+            local: createArea("local", localData),
+            sync: createArea("sync", syncData),
             onChanged: {
                 addListener: vi.fn((fn) => storageChangedListeners.push(fn)),
             },
@@ -56,18 +86,21 @@ export function createChromeMock() {
             create: vi.fn(() => Promise.resolve({})),
         },
 
-        __storageData: storageData,
+        __storageData: localData,
+        __syncData: syncData,
         __messageListeners: messageListeners,
         __tabUpdatedListeners: tabUpdatedListeners,
+        __installedListeners: installedListeners,
         __storageChangedListeners: storageChangedListeners,
 
         /** Clears recorded calls and stored data but keeps registered listeners. */
         __reset() {
-            for (const key of Object.keys(storageData)) delete storageData[key];
+            for (const key of Object.keys(localData)) delete localData[key];
+            for (const key of Object.keys(syncData)) delete syncData[key];
             for (const fn of [
                 chrome.runtime.getURL,
-                chrome.storage.sync.get,
-                chrome.storage.sync.set,
+                ...Object.values(chrome.storage.local),
+                ...Object.values(chrome.storage.sync),
                 chrome.tabs.sendMessage,
                 chrome.tabs.query,
                 chrome.tabs.create,

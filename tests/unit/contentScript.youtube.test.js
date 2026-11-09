@@ -178,7 +178,7 @@ describe("bookmarks on a watch page", () => {
         expect(btn).not.toBeNull();
         expect(btn.classList.contains("ytp-button")).toBe(true);
         expect(btn.querySelector("svg path.ytp-svg-fill")).not.toBeNull();
-        expect(chrome.storage.sync.get).toHaveBeenCalledWith(["vid1"], expect.any(Function));
+        expect(chrome.storage.local.get).toHaveBeenCalledWith(["vid1"], expect.any(Function));
     });
 
     it("does not add a second button when one already exists", async () => {
@@ -298,7 +298,7 @@ describe("bookmarks on a watch page", () => {
         goTo("/watch?v=nav-video");
         await flushPromises();
 
-        expect(chrome.storage.sync.get).toHaveBeenCalledWith(["nav-video"], expect.any(Function));
+        expect(chrome.storage.local.get).toHaveBeenCalledWith(["nav-video"], expect.any(Function));
         const btn = controls.querySelector("button.bookmark-btn");
         expect(btn).not.toBeNull();
 
@@ -313,7 +313,7 @@ describe("bookmarks on a watch page", () => {
         goTo("/");
         await flushPromises();
 
-        expect(chrome.storage.sync.get).not.toHaveBeenCalled();
+        expect(chrome.storage.local.get).not.toHaveBeenCalled();
     });
 
     it("DELETE removes the bookmark, persists and responds asynchronously", async () => {
@@ -394,7 +394,7 @@ describe("bookmarks on a watch page", () => {
         expect(checkbox("watch-later").checked).toBe(false);
         expect(controls.querySelector(".video-bookmark-btn").getAttribute("aria-expanded")).toBe("true");
         // Opening alone saves nothing
-        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
         // Nothing to remove yet
         expect(dialog.querySelector(".attention-remove-bookmark")).toBeNull();
     });
@@ -537,7 +537,7 @@ describe("bookmarks on a watch page", () => {
         // The form stays open with what was typed
         expect(panel().querySelector(".attention-new-playlist-form input").value).toBe("favorites");
         // A rejected name writes nothing at all
-        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
     });
 
     it("Cancel closes the new playlist form without saving", async () => {
@@ -752,7 +752,7 @@ describe("bookmarks on a watch page", () => {
         await loadVideo("vid-removed");
         expect(videoButtonIcon(controls)).toBe("videoBookmarked");
 
-        chrome.storage.sync.set({ attention_bookmarked_videos: JSON.stringify([]) });
+        chrome.storage.local.set({ attention_bookmarked_videos: JSON.stringify([]) });
 
         expect(videoButtonIcon(controls)).toBe("videoBookmark");
         expect(controls.querySelector(".video-bookmark-btn").title).toBe("Save this video to a playlist");
@@ -822,7 +822,7 @@ describe("bookmarks on a watch page", () => {
         const { controls } = setupPlayer();
         await loadVideo("vid-other");
 
-        chrome.storage.sync.set({ "vid-other": JSON.stringify([]) });
+        chrome.storage.local.set({ "vid-other": JSON.stringify([]) });
 
         expect(videoButtonIcon(controls)).toBe("videoBookmarked");
     });

@@ -28,7 +28,7 @@ describe("default playlists", () => {
         ]);
         expect(videos).toEqual([]);
         // Reading does not write
-        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
     });
 
     it("persists the defaults with the first change", async () => {
@@ -53,7 +53,7 @@ describe("default playlists", () => {
     it("Favorites and Watch Later cannot be renamed", async () => {
         await expect(STORE.renamePlaylist("favorites", "Best")).rejects.toThrow('"Favorites" can\'t be renamed');
         await expect(STORE.renamePlaylist("watch-later", "Queue")).rejects.toThrow('"Watch Later" can\'t be renamed');
-        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
     });
 
     it("but videos can still be added to and removed from them", async () => {
@@ -134,7 +134,7 @@ describe("creating and renaming playlists", () => {
     it("can save a video to the new playlist in the same write", async () => {
         const playlist = await STORE.createPlaylist("Talks", video("t1"));
 
-        expect(chrome.storage.sync.set).toHaveBeenCalledTimes(1);
+        expect(chrome.storage.local.set).toHaveBeenCalledTimes(1);
         expect(storedPlaylists().find((p) => p.id === playlist.id).videoIds).toEqual(["t1"]);
         expect(storedVideos().map((v) => v.id)).toEqual(["t1"]);
     });
@@ -146,7 +146,7 @@ describe("creating and renaming playlists", () => {
         ["FAVORITES", 'A playlist named "FAVORITES" already exists'],
     ])("rejects the name %j", async (name, message) => {
         await expect(STORE.createPlaylist(name)).rejects.toThrow(message);
-        expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
     });
 
     it("renames a custom playlist, allowing a change of case of its own name", async () => {

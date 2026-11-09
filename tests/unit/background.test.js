@@ -1,10 +1,106 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 
-let onTabUpdated;
+let onTabUpdated, onInstalled;
 
 beforeAll(async () => {
     await import("../../background.js");
     onTabUpdated = chrome.__tabUpdatedListeners[0];
+    onInstalled = chrome.__installedListeners[0];
+});
+
+const MIGRATION_FLAG = "attention_migration_bookmarks_local";
+
+describe("background.js bookmark migration (sync -> local)", () => {
+    const runMigration = async () => {
+        onInstalled({ reason: "update" });
+        // Let the chained get/set/remove promises settle
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+    };
+
+    it("registers exactly one onInstalled listener", () => {
+        expect(chrome.__installedListeners).toHaveLength(1);
+        expect(typeof onInstalled).toBe("function");
+    });
+
+    it("moves bookmark data from sync to local and marks the migration done", async () => {
+        chrome.__syncData.attention_bookmarked_videos = JSON.stringify([{ id: "vid1", title: "One" }]);
+        chrome.__syncData.attention_playlists = JSON.stringify([{ id: "favorites", name: "Favorites", videoIds: ["vid1"] }]);
+        chrome.__syncData.attention_video_titles = JSON.stringify({ vid1: "One" });
+        chrome.__syncData.vid1 = JSON.stringify([{ time: 5, desc: "Bookmark at 00:00:05" }]);
+
+        await runMigration();
+
+        expect(chrome.__storageData).toEqual({
+            attention_bookmarked_videos: JSON.stringify([{ id: "vid1", title: "One" }]),
+            attention_playlists: JSON.stringify([{ id: "favorites", name: "Favorites", videoIds: ["vid1"] }]),
+            attention_video_titles: JSON.stringify({ vid1: "One" }),
+            vid1: JSON.stringify([{ time: 5, desc: "Bookmark at 00:00:05" }]),
+            [MIGRATION_FLAG]: true,
+        });
+        expect(chrome.__syncData).toEqual({});
+    });
+
+    it("leaves settings (other attention_ keys) in sync storage", async () => {
+        chrome.__syncData.attention_settings = JSON.stringify({ hideShortsReels: { youtubeShorts: true } });
+        chrome.__syncData.attention_blocked_sites = JSON.stringify([{ domain: "facebook.com" }]);
+        chrome.__syncData.vid1 = JSON.stringify([{ time: 5, desc: "Bookmark at 00:00:05" }]);
+
+        await runMigration();
+
+        expect(chrome.__syncData).toEqual({
+            attention_settings: JSON.stringify({ hideShortsReels: { youtubeShorts: true } }),
+            attention_blocked_sites: JSON.stringify([{ domain: "facebook.com" }]),
+        });
+        expect(chrome.__storageData.vid1).toBe(JSON.stringify([{ time: 5, desc: "Bookmark at 00:00:05" }]));
+        expect(chrome.__storageData.attention_settings).toBeUndefined();
+    });
+
+    it("does not overwrite bookmarks already saved locally on this device", async () => {
+        chrome.__storageData.vid1 = JSON.stringify([{ time: 99, desc: "local" }]);
+        chrome.__syncData.vid1 = JSON.stringify([{ time: 5, desc: "synced" }]);
+        chrome.__syncData.vid2 = JSON.stringify([{ time: 7, desc: "synced only" }]);
+
+        await runMigration();
+
+        expect(JSON.parse(chrome.__storageData.vid1)).toEqual([{ time: 99, desc: "local" }]);
+        expect(JSON.parse(chrome.__storageData.vid2)).toEqual([{ time: 7, desc: "synced only" }]);
+        // The stale synced copy is still cleared
+        expect(chrome.__syncData).toEqual({});
+    });
+
+    it("runs only once: a later install event does not touch storage again", async () => {
+        chrome.__syncData.vid1 = JSON.stringify([{ time: 5, desc: "first" }]);
+        await runMigration();
+        expect(chrome.__storageData[MIGRATION_FLAG]).toBe(true);
+
+        chrome.__syncData.vid2 = JSON.stringify([{ time: 6, desc: "arrived later" }]);
+        chrome.storage.local.set.mockClear();
+        chrome.storage.sync.remove.mockClear();
+        await runMigration();
+
+        expect(chrome.storage.local.set).not.toHaveBeenCalled();
+        expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
+        expect(chrome.__syncData.vid2).toBeDefined();
+    });
+
+    it("on a fresh install with nothing synced it only records the flag", async () => {
+        await runMigration();
+
+        expect(chrome.__storageData).toEqual({ [MIGRATION_FLAG]: true });
+        expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
+    });
+
+    it("writes to local before removing from sync so a failure cannot lose data", async () => {
+        chrome.__syncData.vid1 = JSON.stringify([{ time: 5, desc: "x" }]);
+        chrome.storage.local.set.mockImplementationOnce(() => Promise.reject(new Error("quota")));
+
+        await runMigration();
+
+        // Nothing was removed from sync, and no flag was set, so the next install event retries
+        expect(chrome.__syncData.vid1).toBeDefined();
+        expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
+        expect(chrome.__storageData[MIGRATION_FLAG]).toBeUndefined();
+    });
 });
 
 describe("background.js tab listener", () => {

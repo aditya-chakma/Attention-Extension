@@ -9,10 +9,12 @@ const STORE = globalThis.ATTENTION_STORE;
 const { trash: TRASH_ICON, play: PLAY_ICON, plus: PLUS_ICON, edit: EDIT_ICON, playlist: PLAYLIST_ICON } =
     globalThis.ATTENTION_ICONS.markup;
 
-// Reserved storage keys. Every other key in chrome.storage.sync is a YouTube
-// video id holding its timestamp bookmarks.
+// Every key in chrome.storage.local that does not start with the reserved
+// prefix is a YouTube video id holding its timestamp bookmarks. Reserved keys
+// (bookmarked videos, playlists, titles, migration flags, ...) all share it.
 const TITLES_KEY = "attention_video_titles";
-const RESERVED_KEYS = [STORE.VIDEOS_KEY, STORE.PLAYLISTS_KEY, TITLES_KEY];
+const RESERVED_PREFIX = "attention_";
+const isReservedKey = (key) => key.startsWith(RESERVED_PREFIX);
 
 // How many videos the "Recent" tab shows
 const RECENT_LIMIT = 10;
@@ -40,8 +42,8 @@ const parseJSON = (raw, fallback) => {
     }
 };
 
-const fetchAllStorage = () => new Promise((resolve) => chrome.storage.sync.get(null, resolve));
-const setStorage = (items) => new Promise((resolve) => chrome.storage.sync.set(items, resolve));
+const fetchAllStorage = () => new Promise((resolve) => chrome.storage.local.get(null, resolve));
+const setStorage = (items) => new Promise((resolve) => chrome.storage.local.set(items, resolve));
 
 const formatTime = (t) => {
     const date = new Date(0);
@@ -111,7 +113,7 @@ const loadBookmarks = async () => {
 
     const timestamps = {};
     for (const [key, raw] of Object.entries(all)) {
-        if (RESERVED_KEYS.includes(key)) continue;
+        if (isReservedKey(key)) continue;
         const value = parseJSON(raw, null);
         if (Array.isArray(value) && value.length > 0) {
             timestamps[key] = value;
@@ -734,5 +736,5 @@ document.addEventListener("DOMContentLoaded", render);
 // Keep the page in sync with bookmarks added or removed anywhere (player
 // buttons, popup, another dashboard tab) without a reload
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "sync") render();
+    if (area === "local") render();
 });
