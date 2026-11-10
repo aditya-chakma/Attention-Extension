@@ -18,7 +18,7 @@ Unlike traditional blockers, this extension works by **removing unnecessary elem
 ## Current Features
 
 - Hide YouTube Shorts and Facebook Reels.  
-- Block websites to minimize distractions.  
+- Block websites to minimize distractions. Blocking uses `declarativeNetRequest` redirect rules, so a blocked site is never loaded; schedules and temporary unblocks are applied by `background.js` recomputing the rules at each transition.  
 - Bookmark YouTube video timestamps.  
 - Bookmark whole videos at the current playback position (save button in the player).  
 - Dark-themed dashboard (`videos.html`, `timestamps.html`) with thumbnails and channel names, kept in sync in real time, reachable from the popup.  

@@ -10,7 +10,12 @@ const manifest = JSON.parse(read("manifest.json"));
 describe("manifest.json", () => {
     it("is Manifest V3 with the expected permissions", () => {
         expect(manifest.manifest_version).toBe(3);
-        expect(manifest.permissions).toEqual(expect.arrayContaining(["storage", "tabs"]));
+        expect(manifest.permissions).toEqual(expect.arrayContaining(["storage", "tabs", "alarms", "declarativeNetRequest"]));
+    });
+
+    it("can redirect any site the user blocks", () => {
+        // Redirect rules need host access to the sites they redirect
+        expect(manifest.host_permissions).toContain("<all_urls>");
     });
 
     it("runs the background worker as a module so it can import the stores", () => {
@@ -50,9 +55,9 @@ describe("manifest.json", () => {
         expect(contentScript.js.indexOf("bookmarkStore.js")).toBeLessThan(contentScript.js.indexOf("contentScript.js"));
     });
 
-    it("exposes blocked.html to the matched sites", () => {
-        const resources = manifest.web_accessible_resources.flatMap((r) => r.resources);
-        expect(resources).toContain("blocked.html");
+    it("exposes blocked.html to every site, as any of them can be blocked", () => {
+        const entry = manifest.web_accessible_resources.find((r) => r.resources.includes("blocked.html"));
+        expect(entry.matches).toContain("<all_urls>");
     });
 });
 

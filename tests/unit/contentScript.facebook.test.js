@@ -11,8 +11,6 @@ let getURLCallsAtLoad; // snapshot taken right after the script ran, before any 
 
 beforeAll(async () => {
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    // jsdom cannot perform real navigations and reports that via console.error; silence it
-    vi.spyOn(console, "error").mockImplementation(() => {});
 
     await import("../../contentScript.js");
     onMessage = chrome.__messageListeners[0];
@@ -25,8 +23,8 @@ afterEach(() => {
 });
 
 describe("Facebook", () => {
-    it("redirects to the extension's blocked page on load", () => {
-        expect(getURLCallsAtLoad).toContain("blocked.html");
+    it("does not redirect from the content script (blocking is done by background.js rules)", () => {
+        expect(getURLCallsAtLoad).not.toContain("blocked.html");
     });
 
     it("removes Reels sections when told the tab is Facebook", () => {

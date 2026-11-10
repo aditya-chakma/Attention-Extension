@@ -10,6 +10,12 @@ const fixturesDir = path.join(here, "fixtures");
 const ONE_PIXEL_PNG =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+const workerOf = async (context) => {
+    let [worker] = context.serviceWorkers();
+    if (!worker) worker = await context.waitForEvent("serviceworker");
+    return worker;
+};
+
 /**
  * Playwright fixtures that launch Chromium with the unpacked extension loaded.
  *
@@ -38,14 +44,20 @@ export const test = base.extend({
             route.fulfill({ contentType: "image/png", body: Buffer.from(ONE_PIXEL_PNG, "base64") })
         );
 
+        // On install the background worker seeds the default blocked sites and
+        // installs their blocking rules asynchronously; wait for that so the
+        // first navigation of a test is already subject to them
+        const worker = await workerOf(context);
+        await expect
+            .poll(() => worker.evaluate(() => chrome.declarativeNetRequest.getDynamicRules().then((r) => r.length)))
+            .toBeGreaterThan(0);
+
         await use(context);
         await context.close();
     },
 
     serviceWorker: async ({ context }, use) => {
-        let [worker] = context.serviceWorkers();
-        if (!worker) worker = await context.waitForEvent("serviceworker");
-        await use(worker);
+        await use(await workerOf(context));
     },
 
     extensionId: async ({ serviceWorker }, use) => {

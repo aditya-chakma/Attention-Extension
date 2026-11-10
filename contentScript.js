@@ -1,14 +1,6 @@
+// Site blocking lives in background.js (declarativeNetRequest rules built from
+// the settings); this script only runs on pages that were allowed through.
 (() => {
-    const blockedUrls = ["facebook.com"];
-    let currentUrl = window.location.toString();
-
-    blockedUrls.forEach((blockedUrl) => {
-        console.log("Blocked url: " + blockedUrl);
-        if (currentUrl.length > 0 && currentUrl.includes(blockedUrl)) {
-            window.location.href = chrome.runtime.getURL("blocked.html");
-        }
-    });
-
     let youtubeLeftControls, youtubePlayer;
     let currentVideo = "";
     let currentVideoBookmarks = [];

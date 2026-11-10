@@ -3,7 +3,9 @@ import { vi } from "vitest";
 /**
  * Minimal in-memory mock of the chrome.* APIs used by the extension.
  * Listeners registered via addListener are kept in __messageListeners /
- * __tabUpdatedListeners / __installedListeners so tests can invoke them directly.
+ * __tabUpdatedListeners / __installedListeners / __startupListeners /
+ * __alarmListeners so tests can invoke them directly. Dynamic
+ * declarativeNetRequest rules are kept in __dynamicRules.
  *
  * Both storage areas are modeled. Bookmarks live in `local` (exposed as
  * __storageData, which most tests seed and inspect); settings live in `sync`
@@ -14,7 +16,10 @@ export function createChromeMock() {
     const messageListeners = [];
     const tabUpdatedListeners = [];
     const installedListeners = [];
+    const startupListeners = [];
+    const alarmListeners = [];
     const storageChangedListeners = [];
+    let dynamicRules = [];
 
     const createArea = (areaName, data) => ({
         get: vi.fn((keys, callback) => {
@@ -69,6 +74,29 @@ export function createChromeMock() {
             onInstalled: {
                 addListener: vi.fn((fn) => installedListeners.push(fn)),
             },
+            onStartup: {
+                addListener: vi.fn((fn) => startupListeners.push(fn)),
+            },
+        },
+        declarativeNetRequest: {
+            getDynamicRules: vi.fn(() => Promise.resolve(dynamicRules.map((rule) => structuredClone(rule)))),
+            updateDynamicRules: vi.fn(({ removeRuleIds = [], addRules = [] }) => {
+                dynamicRules = dynamicRules.filter((rule) => !removeRuleIds.includes(rule.id));
+                for (const rule of addRules) {
+                    if (dynamicRules.some((r) => r.id === rule.id)) {
+                        return Promise.reject(new Error(`Rule with id ${rule.id} does not have a unique ID.`));
+                    }
+                    dynamicRules.push(structuredClone(rule));
+                }
+                return Promise.resolve();
+            }),
+        },
+        alarms: {
+            create: vi.fn(() => Promise.resolve()),
+            clear: vi.fn(() => Promise.resolve(true)),
+            onAlarm: {
+                addListener: vi.fn((fn) => alarmListeners.push(fn)),
+            },
         },
         storage: {
             local: createArea("local", localData),
@@ -84,6 +112,7 @@ export function createChromeMock() {
             sendMessage: vi.fn(() => Promise.resolve()),
             query: vi.fn(() => Promise.resolve([])),
             create: vi.fn(() => Promise.resolve({})),
+            update: vi.fn(() => Promise.resolve({})),
         },
 
         __storageData: localData,
@@ -91,22 +120,33 @@ export function createChromeMock() {
         __messageListeners: messageListeners,
         __tabUpdatedListeners: tabUpdatedListeners,
         __installedListeners: installedListeners,
+        __startupListeners: startupListeners,
+        __alarmListeners: alarmListeners,
         __storageChangedListeners: storageChangedListeners,
+        get __dynamicRules() {
+            return dynamicRules;
+        },
 
         /** Clears recorded calls and stored data but keeps registered listeners. */
         __reset() {
             for (const key of Object.keys(localData)) delete localData[key];
             for (const key of Object.keys(syncData)) delete syncData[key];
+            dynamicRules = [];
             for (const fn of [
                 chrome.runtime.getURL,
                 ...Object.values(chrome.storage.local),
                 ...Object.values(chrome.storage.sync),
+                ...Object.values(chrome.declarativeNetRequest),
+                chrome.alarms.create,
+                chrome.alarms.clear,
                 chrome.tabs.sendMessage,
                 chrome.tabs.query,
                 chrome.tabs.create,
+                chrome.tabs.update,
             ]) {
                 fn.mockClear();
             }
+            chrome.tabs.query.mockImplementation(() => Promise.resolve([]));
         },
     };
 

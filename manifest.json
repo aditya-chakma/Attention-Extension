@@ -2,8 +2,8 @@
     "name": "Attention",
     "version": "1.2.0",
     "description": "Multi feature Extention to improve your work",
-    "permissions": ["storage", "tabs"],
-    "host_permissions": ["https://*.youtube.com/*", "https://*.facebook.com/*"],
+    "permissions": ["storage", "tabs", "alarms", "declarativeNetRequest"],
+    "host_permissions": ["<all_urls>"],
     "background": {
         "service_worker": "background.js",
         "type": "module"
@@ -20,7 +20,7 @@
             "resources": [
                 "blocked.html"
             ],
-            "matches": ["https://*.youtube.com/*", "https://*.facebook.com/*"]
+            "matches": ["<all_urls>"]
         }
     ],
     "action": {
