@@ -1,3 +1,9 @@
+// The background worker is an ES module (see manifest.json) so it can share
+// settingsStore.js with the extension pages and content scripts
+import "./settingsStore.js";
+
+const SETTINGS = globalThis.ATTENTION_SETTINGS;
+
 // ---- Storage migration -----------------------------------------------------
 // Bookmarks (video entries, playlists, titles and the per-video timestamp
 // lists) used to live in chrome.storage.sync. They now live in
@@ -37,6 +43,8 @@ async function migrateBookmarksToLocal() {
 
 chrome.runtime.onInstalled.addListener(() => {
     migrateBookmarksToLocal().catch((error) => console.error("Attention: bookmark migration failed", error));
+    // First install: block facebook.com by default, as the extension always has
+    SETTINGS.seedDefaults().catch((error) => console.error("Attention: seeding default settings failed", error));
 });
 
 // ---- Content script notifications -----------------------------------------

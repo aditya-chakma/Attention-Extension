@@ -31,7 +31,7 @@ To run it locally open `chrome://extensions`, enable *Developer mode*, click *Lo
 ### Storage
 
 - `chrome.storage.local` holds all bookmark data: bookmarked videos, playlists, video titles and one key per YouTube video id with its timestamp bookmarks. It is per device; video details are too large for the sync quota.
-- `chrome.storage.sync` is reserved for extension settings.
+- `chrome.storage.sync` holds the extension settings (`settingsStore.js`): blocked sites with their schedules, the Shorts/Reels toggles and the unblock PIN hash. Temporary unblocks stay in `chrome.storage.local` so unblocking one device does not unblock the others.
 - Every reserved key starts with `attention_`; any other key is a video id. Versions before 1.2.0 kept bookmarks in sync storage, and `background.js` moves them to local storage once on install/update.
 
 ### Setup

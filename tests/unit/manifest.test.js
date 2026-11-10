@@ -13,6 +13,10 @@ describe("manifest.json", () => {
         expect(manifest.permissions).toEqual(expect.arrayContaining(["storage", "tabs"]));
     });
 
+    it("runs the background worker as a module so it can import the stores", () => {
+        expect(manifest.background.type).toBe("module");
+    });
+
     it("references files that exist", () => {
         const referenced = [
             manifest.background.service_worker,

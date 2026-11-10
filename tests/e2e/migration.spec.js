@@ -56,9 +56,11 @@ test.describe("Bookmark storage migration", () => {
                     old: synced.old,
                     attention_migration_bookmarks_local: true,
                 });
-            expect(await worker.evaluate(() => chrome.storage.sync.get(null))).toEqual({
-                attention_settings: synced.attention_settings,
-            });
+            const syncedAfter = await worker.evaluate(() => chrome.storage.sync.get(null));
+            expect(syncedAfter.attention_settings).toBe(synced.attention_settings);
+            // The first install seeded the default blocked sites; they stay in sync storage
+            expect(Object.keys(syncedAfter).sort()).toEqual(["attention_blocked_sites", "attention_settings"]);
+            expect(JSON.parse(syncedAfter.attention_blocked_sites).sites.map((s) => s.domain)).toEqual(["facebook.com"]);
         } finally {
             await context.close();
         }
