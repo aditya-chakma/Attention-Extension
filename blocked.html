@@ -3,31 +3,22 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>URL Blocked</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                text-align: center;
-                background-color: #f8f9fa;
-                color: #dc3545;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-            }
-            .message {
-                border: 2px solid #dc3545;
-                padding: 20px;
-                border-radius: 10px;
-                background: white;
-            }
-        </style>
+        <title>Attention — Site blocked</title>
+        <link href="dashboard.css" rel="stylesheet" type="text/css" />
+        <link href="blocked.css" rel="stylesheet" type="text/css" />
+        <script type="module" src="blocked.js"></script>
     </head>
     <body>
-        <div class="message">
-            <h1>URL Blocked</h1>
-            <p>Access to this URL has been restricted.</p>
-        </div>
+        <header>
+            <a class="brand" href="videos.html" title="Go to bookmarked videos">
+                <img class="logo" src="assets/ext-icon.png" alt="" />
+                <span>Attention</span>
+            </a>
+        </header>
+
+        <main class="blocked-main">
+            <!-- blocked.js fills this in from the ?site= query parameter and the settings -->
+            <section id="blocked" class="blocked-card" aria-live="polite"></section>
+        </main>
     </body>
 </html>

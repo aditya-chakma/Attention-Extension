@@ -36,7 +36,7 @@ export const test = base.extend({
             const file = url.pathname.startsWith("/watch") ? "youtube-watch.html" : "youtube-home.html";
             return route.fulfill({ contentType: "text/html", body: fs.readFileSync(path.join(fixturesDir, file), "utf8") });
         });
-        await context.route("https://www.facebook.com/**", (route) =>
+        await context.route(/^https:\/\/(www\.|m\.)?facebook\.com\//, (route) =>
             route.fulfill({ contentType: "text/html", body: fs.readFileSync(path.join(fixturesDir, "facebook.html"), "utf8") })
         );
         // Dashboard thumbnails: serve a 1x1 PNG instead of hitting i.ytimg.com

@@ -1,0 +1,130 @@
+/* Blocked page: one centered card on the dashboard's dark theme */
+
+.blocked-main {
+    display: flex;
+    justify-content: center;
+    padding: 48px 32px;
+}
+
+.blocked-card {
+    width: 100%;
+    max-width: 480px;
+    padding: 28px 32px;
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--danger);
+    border-radius: 12px;
+    background-color: var(--surface);
+}
+
+.blocked-card h1 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    overflow-wrap: anywhere;
+}
+
+.blocked-card h1 .domain {
+    color: var(--danger);
+}
+
+.blocked-reason {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.blocked-until {
+    margin: 12px 0 0;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.blocked-section {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.blocked-section h2 {
+    margin: 0 0 12px;
+    font-size: 15px;
+}
+
+.unblock-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.unblock-fields {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.unblock-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 140px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.unblock-fields input,
+.unblock-fields select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+}
+
+.unblock-fields input:focus,
+.unblock-fields select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.unblock-form .btn {
+    align-self: flex-start;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.blocked-note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.blocked-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 20px;
+    font-size: 13px;
+}
+
+.blocked-links a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.blocked-links a:hover {
+    text-decoration: underline;
+}
+
+.continue-link {
+    display: inline-block;
+    margin-top: 16px;
+    color: var(--accent);
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.continue-link:hover {
+    text-decoration: underline;
+}

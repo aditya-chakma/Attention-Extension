@@ -24,6 +24,8 @@ FILES=(
     popup.css
     utils.js
     blocked.html
+    blocked.css
+    blocked.js
     videos.html
     timestamps.html
     playlist.html

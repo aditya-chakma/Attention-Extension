@@ -68,6 +68,7 @@ export function createChromeMock() {
     const chrome = {
         runtime: {
             getURL: vi.fn((path) => `chrome-extension://test-extension-id/${path}`),
+            sendMessage: vi.fn(() => Promise.resolve()),
             onMessage: {
                 addListener: vi.fn((fn) => messageListeners.push(fn)),
             },
@@ -134,6 +135,7 @@ export function createChromeMock() {
             dynamicRules = [];
             for (const fn of [
                 chrome.runtime.getURL,
+                chrome.runtime.sendMessage,
                 ...Object.values(chrome.storage.local),
                 ...Object.values(chrome.storage.sync),
                 ...Object.values(chrome.declarativeNetRequest),
@@ -147,6 +149,7 @@ export function createChromeMock() {
                 fn.mockClear();
             }
             chrome.tabs.query.mockImplementation(() => Promise.resolve([]));
+            chrome.runtime.sendMessage.mockImplementation(() => Promise.resolve());
         },
     };
 
