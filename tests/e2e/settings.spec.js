@@ -1,24 +1,33 @@
-import { test, expect } from "./extension.js";
+import { test, expect, blockSite } from "./extension.js";
 
 test.describe("Settings page", () => {
     const pageUrl = (extensionId) => `chrome-extension://${extensionId}/settings.html`;
 
-    test("is dark themed, marks its tab current, and is reachable from the other pages", async ({ page, extensionId }) => {
+    test("is dark themed, has no bookmark tabs, and is reached from the header link next to the brand", async ({
+        page,
+        extensionId,
+    }) => {
         await page.goto(pageUrl(extensionId));
 
         await expect(page.locator("body")).toHaveCSS("background-color", "rgb(15, 17, 21)");
-        await expect(page.locator("#tab-settings")).toHaveAttribute("aria-current", "page");
+        await expect(page.locator("header #settings-link")).toHaveAttribute("aria-current", "page");
+        await expect(page.locator("header #settings-link svg")).toBeVisible();
+        await expect(page.locator(".tabs")).toHaveCount(0);
 
-        await page.goto(`chrome-extension://${extensionId}/videos.html`);
-        await page.locator("#tab-settings").click();
+        // The bookmark tabs live on the pages behind the "Attention" brand
+        await page.locator("header a.brand").click();
+        await expect(page).toHaveURL(`chrome-extension://${extensionId}/videos.html`);
+        await expect(page.locator("#tab-videos")).toBeVisible();
+        await expect(page.locator("#tab-timestamps")).toBeVisible();
+        await expect(page.locator("#tab-settings")).toHaveCount(0);
+
+        await page.locator("header #settings-link").click();
         await expect(page).toHaveURL(pageUrl(extensionId));
     });
 
-    test("lists the seeded site and adds a typed site normalized", async ({ page, extensionId }) => {
+    test("starts empty and adds a typed site normalized", async ({ page, extensionId }) => {
         await page.goto(pageUrl(extensionId));
-
-        const facebook = page.locator('.site-row[data-domain="facebook.com"]');
-        await expect(facebook.locator(".site-summary")).toHaveText("Always blocked");
+        await expect(page.locator(".site-empty")).toHaveText("No blocked sites. Add one above.");
 
         await page.locator("#add-site-input").fill("https://www.Reddit.com/r/all");
         await page.locator("#add-site-form button").click();
@@ -42,6 +51,7 @@ test.describe("Settings page", () => {
     });
 
     test("a schedule edited in the UI is saved, summarized and enforced", async ({ page, serviceWorker, extensionId }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await page.goto(pageUrl(extensionId));
         const row = page.locator('.site-row[data-domain="facebook.com"]');
 
@@ -66,7 +76,8 @@ test.describe("Settings page", () => {
             .toBe("https://www.facebook.com/");
     });
 
-    test("the switch disables blocking live and the trash removes the site", async ({ page, extensionId }) => {
+    test("the switch disables blocking live and the trash removes the site", async ({ page, serviceWorker, extensionId }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await page.goto(pageUrl(extensionId));
         const row = page.locator('.site-row[data-domain="facebook.com"]');
 
@@ -96,8 +107,10 @@ test.describe("Settings page", () => {
 
     test("a PIN set here makes the blocked page offer the unblock form; removing it needs a confirmation", async ({
         page,
+        serviceWorker,
         extensionId,
     }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await page.goto(pageUrl(extensionId));
         await expect(page.locator(".pin-status")).toHaveText("No PIN set: blocked pages don't offer a temporary unblock.");
 

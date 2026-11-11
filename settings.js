@@ -377,6 +377,7 @@ const render = async () => {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector("#settings-link .icon").innerHTML = globalThis.ATTENTION_ICONS.markup.gear;
     bindAddSiteForm();
     bindHideToggles();
     render();

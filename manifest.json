@@ -11,8 +11,9 @@
     "content_scripts": [
         {
             "matches": ["https://*.youtube.com/*", "https://*.facebook.com/*"],
-            "js": ["icons.js", "bookmarkStore.js", "contentScript.js"],
-            "css": ["hide.css", "player-buttons.css"]
+            "js": ["icons.js", "bookmarkStore.js", "settingsStore.js", "contentScript.js"],
+            "css": ["hide.css", "player-buttons.css"],
+            "run_at": "document_start"
         }
     ],
     "web_accessible_resources": [

@@ -36,10 +36,6 @@
         pinHash: null,
     });
 
-    // The sites blocked out of the box on a fresh install (the extension
-    // blocked facebook.com unconditionally before settings existed)
-    const SEED_DOMAINS = Object.freeze(["facebook.com"]);
-
     const parse = (raw, fallback) => {
         if (!raw) return fallback;
         try {
@@ -283,23 +279,6 @@
             return site;
         });
 
-    /**
-     * First-install defaults; called from the background worker's onInstalled.
-     * A no-op once the key exists, so user deletions are never undone.
-     */
-    const seedDefaults = () =>
-        enqueue(async () => {
-            const data = await getSynced([SITES_KEY]);
-            if (data[SITES_KEY]) return false;
-            const record = { nextRuleId: FIRST_RULE_ID, sites: [] };
-            for (const domain of SEED_DOMAINS) {
-                record.sites.push({ id: newSiteId(), ruleId: record.nextRuleId, domain, enabled: true, schedule: null });
-                record.nextRuleId += 1;
-            }
-            await setSynced({ [SITES_KEY]: JSON.stringify(record) });
-            return true;
-        });
-
     // ---- Other settings (chrome.storage.sync) ------------------------------
 
     /** Reads { hideShortsReels, pinHash } with defaults filled in. */
@@ -424,7 +403,6 @@
         removeSite,
         toggleSite,
         setSchedule,
-        seedDefaults,
         // settings + PIN
         loadSettings,
         setHideToggle,

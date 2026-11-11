@@ -1,7 +1,19 @@
-import { test, expect } from "./extension.js";
+import { test, expect, blockSite } from "./extension.js";
 
 test.describe("Website blocking", () => {
-    test("facebook.com is redirected to the extension's blocked page before it loads", async ({ page, extensionId }) => {
+    test("nothing is blocked out of the box", async ({ page, serviceWorker }) => {
+        expect(await serviceWorker.evaluate(() => globalThis.ATTENTION_SETTINGS.loadBlockedSites())).toEqual([]);
+
+        await page.goto("https://www.facebook.com/");
+        expect(page.url()).toBe("https://www.facebook.com/");
+    });
+
+    test("a blocked site is redirected to the extension's blocked page before it loads", async ({
+        page,
+        serviceWorker,
+        extensionId,
+    }) => {
+        await blockSite(serviceWorker, "facebook.com");
         // Blocking is a declarativeNetRequest redirect rule, so the Facebook
         // page itself is never fetched
         let facebookRequested = false;
@@ -17,7 +29,8 @@ test.describe("Website blocking", () => {
         expect(facebookRequested).toBe(false);
     });
 
-    test("the blocked page is dark themed and, without a PIN, points to Settings", async ({ page }) => {
+    test("the blocked page is dark themed and, without a PIN, points to Settings", async ({ page, serviceWorker }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await page.goto("https://www.facebook.com/");
 
         await expect(page.locator("body")).toHaveCSS("background-color", "rgb(15, 17, 21)");
@@ -27,6 +40,7 @@ test.describe("Website blocking", () => {
     });
 
     test("the blocked page describes the site's schedule", async ({ page, serviceWorker }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await serviceWorker.evaluate(async () => {
             const S = globalThis.ATTENTION_SETTINGS;
             const [facebook] = await S.loadBlockedSites();
@@ -40,7 +54,8 @@ test.describe("Website blocking", () => {
         await expect(page.locator(".blocked-until")).toHaveText("Blocked until 12:00 AM");
     });
 
-    test("subdomains of a blocked site are blocked too", async ({ page, extensionId }) => {
+    test("subdomains of a blocked site are blocked too", async ({ page, serviceWorker, extensionId }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await page.goto("https://m.facebook.com/reels");
 
         expect(page.url()).toBe(`chrome-extension://${extensionId}/blocked.html?site=facebook.com`);
@@ -83,6 +98,7 @@ test.describe("Website blocking", () => {
         serviceWorker,
         extensionId,
     }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await serviceWorker.evaluate(() => globalThis.ATTENTION_SETTINGS.setPin("1234"));
 
         await page.goto("https://www.facebook.com/");
@@ -106,6 +122,7 @@ test.describe("Website blocking", () => {
     });
 
     test("the blocked page follows a change made elsewhere and offers to continue", async ({ page, serviceWorker }) => {
+        await blockSite(serviceWorker, "facebook.com");
         await page.goto("https://www.facebook.com/");
         await expect(page.locator("a.continue-link")).toHaveCount(0);
 

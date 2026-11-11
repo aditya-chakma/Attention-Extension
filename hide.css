@@ -1,6 +1,8 @@
-/* Pre-hide distracting elements instantly; contentScript.js then removes them from the DOM */
-ytd-rich-section-renderer,
-ytd-reel-shelf-renderer,
-[aria-label="Reels"] {
+/* Pre-hide distracting elements instantly; contentScript.js then removes them from the DOM.
+   Hidden by default; the content script adds the "show" attribute to <html> when the
+   matching toggle is off in Settings (see settingsStore.js). */
+html:not([data-attention-show-shorts]) ytd-rich-section-renderer,
+html:not([data-attention-show-shorts]) ytd-reel-shelf-renderer,
+html:not([data-attention-show-reels]) [aria-label="Reels"] {
     display: none !important;
 }

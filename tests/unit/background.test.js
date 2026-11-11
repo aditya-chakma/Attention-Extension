@@ -24,12 +24,6 @@ const settle = async () => {
     for (let i = 0; i < 5; i++) await flushPromises();
 };
 
-// onInstalled also seeds the default blocked sites into sync storage
-const seededSites = () => {
-    const record = JSON.parse(chrome.__syncData[SITES_KEY]);
-    return record.sites.map((s) => s.domain);
-};
-
 const site = (overrides = {}) => ({
     id: "site-" + (overrides.domain ?? "facebook.com"),
     ruleId: 1,
@@ -71,9 +65,7 @@ describe("background.js bookmark migration (sync -> local)", () => {
             vid1: JSON.stringify([{ time: 5, desc: "Bookmark at 00:00:05" }]),
             [MIGRATION_FLAG]: true,
         });
-        // Only the seeded default settings remain in sync storage
-        expect(Object.keys(chrome.__syncData)).toEqual([SITES_KEY]);
-        expect(seededSites()).toEqual(["facebook.com"]);
+        expect(chrome.__syncData).toEqual({});
     });
 
     it("leaves settings (other attention_ keys) in sync storage", async () => {
@@ -101,7 +93,7 @@ describe("background.js bookmark migration (sync -> local)", () => {
         expect(JSON.parse(chrome.__storageData.vid1)).toEqual([{ time: 99, desc: "local" }]);
         expect(JSON.parse(chrome.__storageData.vid2)).toEqual([{ time: 7, desc: "synced only" }]);
         // The stale synced copies are still cleared
-        expect(Object.keys(chrome.__syncData)).toEqual([SITES_KEY]);
+        expect(chrome.__syncData).toEqual({});
     });
 
     it("runs only once: a later install event does not move data again", async () => {
@@ -118,20 +110,13 @@ describe("background.js bookmark migration (sync -> local)", () => {
         expect(chrome.__storageData.vid2).toBeUndefined();
     });
 
-    it("on a fresh install it records the flag and seeds facebook.com as a blocked site", async () => {
+    it("on a fresh install it only records the flag; no site is blocked by default", async () => {
         await runMigration();
 
         expect(chrome.__storageData[MIGRATION_FLAG]).toBe(true);
         expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
-        expect(seededSites()).toEqual(["facebook.com"]);
-    });
-
-    it("never re-seeds sites the user has since removed", async () => {
-        chrome.__syncData[SITES_KEY] = JSON.stringify({ nextRuleId: 2, sites: [] });
-
-        await runMigration();
-
-        expect(seededSites()).toEqual([]);
+        expect(chrome.__syncData).toEqual({});
+        expect(chrome.__dynamicRules).toEqual([]);
     });
 
     it("writes to local before removing from sync so a failure cannot lose data", async () => {

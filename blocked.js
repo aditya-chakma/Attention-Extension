@@ -4,7 +4,8 @@
 // checked by the background worker, which also updates the rules before
 // replying, so the page can navigate straight away.
 
-// Publishes globalThis.ATTENTION_SETTINGS
+// Publish globalThis.ATTENTION_ICONS and globalThis.ATTENTION_SETTINGS
+import "./icons.js";
 import "./settingsStore.js";
 
 const SETTINGS = globalThis.ATTENTION_SETTINGS;
@@ -194,7 +195,11 @@ const render = async () => {
     renderLinks(card, hasPin);
 };
 
-document.addEventListener("DOMContentLoaded", render);
+document.addEventListener("DOMContentLoaded", () => {
+    const icon = document.querySelector("#settings-link .icon");
+    if (icon) icon.innerHTML = globalThis.ATTENTION_ICONS.markup.gear;
+    render();
+});
 
 // Follow changes made elsewhere while this page is open: the site removed from
 // the list, its schedule edited, a PIN set or an unblock granted in another tab

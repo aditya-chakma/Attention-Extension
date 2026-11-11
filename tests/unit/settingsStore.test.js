@@ -308,14 +308,6 @@ describe("blocked sites CRUD", () => {
         expect(chrome.storage.sync.set).not.toHaveBeenCalled();
     });
 
-    it("seedDefaults blocks facebook.com once and never resurrects deletions", async () => {
-        expect(await SETTINGS.seedDefaults()).toBe(true);
-        expect(storedSites().map((s) => s.domain)).toEqual(["facebook.com"]);
-
-        await SETTINGS.removeSite(storedSites()[0].id);
-        expect(await SETTINGS.seedDefaults()).toBe(false);
-        expect(storedSites()).toEqual([]);
-    });
 });
 
 describe("settings and toggles", () => {

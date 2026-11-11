@@ -73,14 +73,36 @@ afterEach(() => {
 });
 
 describe("page navigation", () => {
-    it("marks the settings tab as current here, and every page links to every page", () => {
-        for (const file of ["settings.html", "videos.html", "timestamps.html", "playlist.html"]) {
-            const html = read(file);
-            for (const target of ["videos.html", "timestamps.html", "settings.html"]) {
-                expect(html, `${file} should link to ${target}`).toContain(`href="${target}"`);
-            }
+    it("every page has the Settings link in its header, next to the Attention brand", () => {
+        for (const file of ["settings.html", "videos.html", "timestamps.html", "playlist.html", "blocked.html"]) {
+            const header = read(file).match(/<header>([\s\S]*?)<\/header>/)[1];
+            expect(header, `${file} header`).toContain('class="brand" href="videos.html"');
+            expect(header, `${file} header`).toContain('id="settings-link"');
+            expect(header, `${file} header`).toContain('href="settings.html"');
         }
-        expect(read("settings.html")).toContain('id="tab-settings" class="tab active"');
+    });
+
+    it("marks the header link current on the settings page only", () => {
+        expect(read("settings.html")).toContain('id="settings-link" class="header-link active" aria-current="page"');
+        for (const file of ["videos.html", "timestamps.html", "playlist.html", "blocked.html"]) {
+            expect(read(file)).toContain('id="settings-link" class="header-link" href="settings.html"');
+        }
+    });
+
+    it("the bookmark tabs appear only on the bookmark pages, not on the settings page", () => {
+        for (const file of ["videos.html", "timestamps.html", "playlist.html"]) {
+            const html = read(file);
+            expect(html).toContain('id="tab-videos"');
+            expect(html).toContain('id="tab-timestamps"');
+            expect(html).not.toContain('id="tab-settings"');
+        }
+        expect(read("settings.html")).not.toContain('class="tabs"');
+        expect(read("settings.html")).not.toContain('id="tab-');
+    });
+
+    it("draws the gear icon into the header link", async () => {
+        await renderPage();
+        expect(document.querySelector("#settings-link .icon svg")).not.toBeNull();
     });
 });
 

@@ -13,13 +13,50 @@
         "yt-watch": "ytd-reel-shelf-renderer",
     };
 
+    // ---- Shorts / Reels toggles (settingsStore.js, globalThis.ATTENTION_SETTINGS)
+    // hide.css hides the sections unless the <html> element carries the
+    // matching "show" attribute, so the default (hidden) needs no JavaScript
+    // and the toggle off just adds an attribute. Removal from the DOM below is
+    // skipped for a toggle that is off.
+    const SETTINGS = globalThis.ATTENTION_SETTINGS;
+    const TOGGLE_FOR_SOURCE = { "fb": "facebookReels", "yt-home": "youtubeShorts", "yt-watch": "youtubeShorts" };
+    const SHOW_ATTRIBUTES = { youtubeShorts: "data-attention-show-shorts", facebookReels: "data-attention-show-reels" };
+
+    // Until the settings are read the sections are hidden by hide.css but not
+    // removed: removal can't be undone, and at document_start the page can be
+    // parsed before the storage read resolves
+    let hideToggles = { youtubeShorts: true, facebookReels: true };
+    let togglesKnown = false;
+
+    const removalEnabled = (source) => togglesKnown && Boolean(source && hideToggles[TOGGLE_FOR_SOURCE[source]]);
+
+    const applyHideToggles = (toggles) => {
+        togglesKnown = true;
+        hideToggles = { ...hideToggles, ...toggles };
+        for (const [toggle, attribute] of Object.entries(SHOW_ATTRIBUTES)) {
+            document.documentElement.toggleAttribute(attribute, !hideToggles[toggle]);
+        }
+        // Switched on while the page is open: catch what is already there
+        if (removalEnabled(activeSource)) sweep();
+    };
+
+    const loadHideToggles = () =>
+        SETTINGS.loadSettings()
+            .then((settings) => applyHideToggles(settings.hideShortsReels))
+            .catch(() => applyHideToggles({})); // unreadable settings: keep the defaults
+
+    loadHideToggles();
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "sync" && SETTINGS.SETTINGS_KEY in changes) loadHideToggles();
+    });
+
     let activeSource = null;
     let sweepScheduled = false;
     let domObserver = null;
 
     function sweep() {
         sweepScheduled = false;
-        if (!activeSource) return;
+        if (!removalEnabled(activeSource)) return;
 
         const nodes = document.querySelectorAll(REMOVAL_SELECTORS[activeSource]);
         if (nodes.length > 0) {
@@ -65,7 +102,8 @@
                 }
             });
 
-            observer.observe(document.body, {
+            // The script runs at document_start, when <body> may not exist yet
+            observer.observe(document.documentElement, {
                 childList: true,
                 subtree: true
             });

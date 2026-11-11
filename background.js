@@ -131,8 +131,6 @@ function syncRules() {
 
 chrome.runtime.onInstalled.addListener(async () => {
     await migrateBookmarksToLocal().catch((error) => console.error("Attention: bookmark migration failed", error));
-    // First install: block facebook.com by default, as the extension always has
-    await SETTINGS.seedDefaults().catch((error) => console.error("Attention: seeding default settings failed", error));
     await syncRules();
 });
 

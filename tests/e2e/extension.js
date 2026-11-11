@@ -44,14 +44,6 @@ export const test = base.extend({
             route.fulfill({ contentType: "image/png", body: Buffer.from(ONE_PIXEL_PNG, "base64") })
         );
 
-        // On install the background worker seeds the default blocked sites and
-        // installs their blocking rules asynchronously; wait for that so the
-        // first navigation of a test is already subject to them
-        const worker = await workerOf(context);
-        await expect
-            .poll(() => worker.evaluate(() => chrome.declarativeNetRequest.getDynamicRules().then((r) => r.length)))
-            .toBeGreaterThan(0);
-
         await use(context);
         await context.close();
     },
@@ -64,5 +56,23 @@ export const test = base.extend({
         await use(new URL(serviceWorker.url()).host);
     },
 });
+
+/**
+ * Adds a blocked site through the settings store and waits until the
+ * background worker has installed its blocking rule, so the next navigation
+ * is already subject to it. Nothing is blocked by default.
+ */
+export const blockSite = async (serviceWorker, domain) => {
+    const site = await serviceWorker.evaluate((d) => globalThis.ATTENTION_SETTINGS.addSite(d), domain);
+    await expect
+        .poll(() =>
+            serviceWorker.evaluate(
+                (ruleId) => chrome.declarativeNetRequest.getDynamicRules().then((rules) => rules.some((r) => r.id === ruleId)),
+                site.ruleId
+            )
+        )
+        .toBe(true);
+    return site;
+};
 
 export { expect };

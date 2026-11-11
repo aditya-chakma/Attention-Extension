@@ -3,7 +3,7 @@
  * @vitest-environment-options { "url": "https://www.facebook.com/" }
  */
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
-import { flushRemoval } from "./helpers.js";
+import { flushRemoval, flushPromises } from "./helpers.js";
 
 let onMessage;
 let logSpy;
@@ -12,7 +12,10 @@ let getURLCallsAtLoad; // snapshot taken right after the script ran, before any 
 beforeAll(async () => {
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
+    await import("../../settingsStore.js");
     await import("../../contentScript.js");
+    // Removal starts once the toggles have been read from storage
+    await flushPromises();
     onMessage = chrome.__messageListeners[0];
     getURLCallsAtLoad = chrome.runtime.getURL.mock.calls.map(([path]) => path);
 });
@@ -59,5 +62,45 @@ describe("Facebook", () => {
         await flushRemoval();
 
         expect(document.querySelectorAll('[aria-label="Stories"]')).toHaveLength(1);
+    });
+});
+
+describe("Hide Facebook Reels toggle", () => {
+    const SETTINGS_KEY = "attention_settings";
+    const reel = () => {
+        const node = document.createElement("div");
+        node.setAttribute("aria-label", "Reels");
+        return node;
+    };
+    const setToggle = async (facebookReels) => {
+        chrome.storage.sync.set({ [SETTINGS_KEY]: JSON.stringify({ hideShortsReels: { youtubeShorts: true, facebookReels } }) });
+        await flushPromises();
+    };
+
+    afterEach(async () => {
+        await setToggle(true);
+    });
+
+    it("turning the toggle off marks <html> so hide.css shows Reels, and stops removing them", async () => {
+        onMessage({ source: "fb" }, {}, () => {});
+        await setToggle(false);
+
+        expect(document.documentElement.hasAttribute("data-attention-show-reels")).toBe(true);
+        document.body.append(reel());
+        await flushRemoval();
+        expect(document.querySelectorAll('[aria-label="Reels"]')).toHaveLength(1);
+        expect(logSpy).not.toHaveBeenCalled();
+    });
+
+    it("turning it back on sweeps the Reels already on the page", async () => {
+        onMessage({ source: "fb" }, {}, () => {});
+        await setToggle(false);
+        document.body.append(reel());
+        await flushRemoval();
+
+        await setToggle(true);
+
+        expect(document.documentElement.hasAttribute("data-attention-show-reels")).toBe(false);
+        expect(document.querySelectorAll('[aria-label="Reels"]')).toHaveLength(0);
     });
 });

@@ -49,6 +49,21 @@ describe("manifest.json", () => {
         expect(contentScript.css).toContain("player-buttons.css");
     });
 
+    it("loads the settings store before the content script and runs at document_start", () => {
+        const [contentScript] = manifest.content_scripts;
+        expect(contentScript.js.indexOf("settingsStore.js")).toBeGreaterThanOrEqual(0);
+        expect(contentScript.js.indexOf("settingsStore.js")).toBeLessThan(contentScript.js.indexOf("contentScript.js"));
+        // Early enough to read the toggles before the page renders
+        expect(contentScript.run_at).toBe("document_start");
+    });
+
+    it("hide.css hides by default and only shows when the content script sets the attribute", () => {
+        const css = read("hide.css");
+        expect(css).toContain("html:not([data-attention-show-shorts]) ytd-rich-section-renderer");
+        expect(css).toContain("html:not([data-attention-show-shorts]) ytd-reel-shelf-renderer");
+        expect(css).toContain('html:not([data-attention-show-reels]) [aria-label="Reels"]');
+    });
+
     it("loads the bookmark store before the content script", () => {
         const [contentScript] = manifest.content_scripts;
         expect(contentScript.js.indexOf("bookmarkStore.js")).toBeGreaterThanOrEqual(0);

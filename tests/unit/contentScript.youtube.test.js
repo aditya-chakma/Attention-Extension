@@ -25,7 +25,10 @@ beforeAll(async () => {
 
     await import("../../icons.js");
     await import("../../bookmarkStore.js");
+    await import("../../settingsStore.js");
     await import("../../contentScript.js");
+    // Removal starts once the toggles have been read from storage
+    await flushPromises();
     onMessage = chrome.__messageListeners[0];
 
     atLoad = {
@@ -825,5 +828,54 @@ describe("bookmarks on a watch page", () => {
         chrome.storage.local.set({ "vid-other": JSON.stringify([]) });
 
         expect(videoButtonIcon(controls)).toBe("videoBookmarked");
+    });
+});
+
+describe("Hide YouTube Shorts toggle", () => {
+    const SETTINGS_KEY = "attention_settings";
+    const setToggle = async (youtubeShorts) => {
+        chrome.storage.sync.set({ [SETTINGS_KEY]: JSON.stringify({ hideShortsReels: { youtubeShorts, facebookReels: true } }) });
+        await flushPromises();
+    };
+
+    afterEach(async () => {
+        await setToggle(true);
+    });
+
+    it("hides by default: no 'show' attribute on <html>", () => {
+        expect(document.documentElement.hasAttribute("data-attention-show-shorts")).toBe(false);
+    });
+
+    it("turning the toggle off marks <html> so hide.css shows Shorts, and stops removing them", async () => {
+        await setToggle(false);
+
+        expect(document.documentElement.hasAttribute("data-attention-show-shorts")).toBe(true);
+        expect(document.documentElement.hasAttribute("data-attention-show-reels")).toBe(false);
+
+        document.body.append(richSection());
+        await flushRemoval();
+        expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(1);
+    });
+
+    it("turning it back on removes the attribute and sweeps what is already on the page", async () => {
+        await setToggle(false);
+        document.body.append(richSection());
+        await flushRemoval();
+        expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(1);
+
+        await setToggle(true);
+
+        expect(document.documentElement.hasAttribute("data-attention-show-shorts")).toBe(false);
+        expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(0);
+    });
+
+    it("ignores the Facebook toggle on YouTube", async () => {
+        chrome.storage.sync.set({ [SETTINGS_KEY]: JSON.stringify({ hideShortsReels: { youtubeShorts: true, facebookReels: false } }) });
+        await flushPromises();
+
+        document.body.append(richSection());
+        await flushRemoval();
+        expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(0);
+        expect(document.documentElement.hasAttribute("data-attention-show-reels")).toBe(true);
     });
 });

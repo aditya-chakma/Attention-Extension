@@ -731,7 +731,15 @@ const render = async () => {
     }
 };
 
-document.addEventListener("DOMContentLoaded", render);
+const drawHeaderIcons = () => {
+    const icon = document.querySelector("#settings-link .icon");
+    if (icon) icon.innerHTML = globalThis.ATTENTION_ICONS.markup.gear;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+    drawHeaderIcons();
+    render();
+});
 
 // Keep the page in sync with bookmarks added or removed anywhere (player
 // buttons, popup, another dashboard tab) without a reload

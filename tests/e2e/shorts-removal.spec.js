@@ -66,3 +66,44 @@ test.describe("YouTube Shorts removal", () => {
         await expect(page.locator("ytd-rich-section-renderer")).toHaveCount(0);
     });
 });
+
+test.describe("Shorts & Reels toggles", () => {
+    const setToggle = (serviceWorker, toggle, hidden) =>
+        serviceWorker.evaluate(([t, h]) => globalThis.ATTENTION_SETTINGS.setHideToggle(t, h), [toggle, hidden]);
+
+    test("with 'Hide YouTube Shorts' off the shelves stay visible, and come back when it is on again", async ({
+        page,
+        serviceWorker,
+    }) => {
+        await setToggle(serviceWorker, "youtubeShorts", false);
+        await page.goto("https://www.youtube.com/");
+
+        await expect(page.locator("ytd-rich-section-renderer")).toHaveCount(2);
+        await expect(page.locator("ytd-rich-section-renderer").first()).toBeVisible();
+        await expect(page.locator("#reel-on-home")).toBeVisible();
+
+        // Flipping it on applies to the open tab without a reload
+        await setToggle(serviceWorker, "youtubeShorts", true);
+        await expect(page.locator("ytd-rich-section-renderer")).toHaveCount(0);
+        await expect(page.locator("#reel-on-home")).toBeHidden();
+    });
+
+    test("Facebook Reels are removed by default and shown when 'Hide Facebook Reels' is off", async ({
+        page,
+        serviceWorker,
+    }) => {
+        await page.goto("https://www.facebook.com/");
+        await expect(page.locator('[aria-label="Reels"]')).toHaveCount(0);
+
+        await setToggle(serviceWorker, "facebookReels", false);
+        await page.reload();
+        await expect(page.locator('[aria-label="Reels"]')).toBeVisible();
+    });
+
+    test("the toggles are independent: Reels off leaves Shorts hidden", async ({ page, serviceWorker }) => {
+        await setToggle(serviceWorker, "facebookReels", false);
+        await page.goto("https://www.youtube.com/");
+
+        await expect(page.locator("ytd-rich-section-renderer")).toHaveCount(0);
+    });
+});
