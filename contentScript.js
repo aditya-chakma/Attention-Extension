@@ -1,3 +1,8 @@
+// Runs on youtube.com and facebook.com at document_start (see manifest.json),
+// after icons.js, bookmarkStore.js and settingsStore.js:
+//  - removes YouTube Shorts shelves / Facebook Reels sections (unless switched
+//    off in Settings), see hide.css for the instant pre-hide
+//  - adds the timestamp and "Save to playlist" buttons to the YouTube player
 // Site blocking lives in background.js (declarativeNetRequest rules built from
 // the settings); this script only runs on pages that were allowed through.
 (() => {

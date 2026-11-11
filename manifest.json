@@ -1,7 +1,7 @@
 {
     "name": "Attention",
     "version": "1.2.0",
-    "description": "Multi feature Extention to improve your work",
+    "description": "Hide YouTube Shorts and Facebook Reels, block distracting sites on a schedule, and bookmark YouTube videos and timestamps.",
     "permissions": ["storage", "tabs", "alarms", "declarativeNetRequest"],
     "host_permissions": ["<all_urls>"],
     "background": {

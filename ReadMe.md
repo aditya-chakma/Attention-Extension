@@ -1,27 +1,78 @@
-# Attention! Chrome Extension to Reduce Distractions 🚀  
+# Attention! Chrome Extension to Reduce Distractions 🚀
 
-This Chrome extension is your productivity companion, designed to help you stay focused. With **Attention**, you can:  
+This Chrome extension is your productivity companion, designed to help you stay focused. With **Attention**, you can:
 
-- **Bookmark YouTube Timelines**: Save specific timestamps in YouTube videos and revisit them directly from your bookmarks.  
-- **Declutter Social Media**: Remove YouTube Shorts from the homepage and watch pages, and eliminate Facebook Reels from your newsfeed.  
-- **Block Distracting Websites**: Prevent access to hardcoded sites that disrupt your workflow.  
-
-Unlike traditional blockers, this extension works by **removing unnecessary elements** from the page, ensuring a seamless browsing experience.  
+- **Declutter Social Media**: remove YouTube Shorts from the home and watch pages and Facebook Reels from the feed, each with its own on/off switch.
+- **Block Distracting Websites**: block any site you choose, all day or on a schedule (e.g. 1 PM to 6 PM on Fridays and Saturdays). Blocked pages never load.
+- **Give Yourself a Speed Bump**: set a PIN and a blocked page will offer to lift the block for 5 to 60 minutes. Forgot it? Reset it in Settings; it is a commitment device, not a lock.
+- **Bookmark YouTube**: save timestamps in a video and whole videos into playlists, and browse them on a dark-themed dashboard.
 
 ## Tech Stack
 
-- Vanilla JavaScript  
-- Manifest V3  
-- HTML  
-- CSS  
+- Vanilla JavaScript (no build step)
+- Manifest V3 (module service worker, `declarativeNetRequest`)
+- HTML
+- CSS
 
 ## Current Features
 
-- Hide YouTube Shorts and Facebook Reels (each can be turned off in Settings; `hide.css` hides them instantly and the content script removes them once the toggles are read).  
-- Block websites from the Settings page (gear link in every page header), optionally on a schedule, with a PIN for temporary unblocks. Nothing is blocked by default. Blocking uses `declarativeNetRequest` redirect rules, so a blocked site is never loaded; schedules and temporary unblocks are applied by `background.js` recomputing the rules at each transition.  
-- Bookmark YouTube video timestamps.  
-- Bookmark whole videos at the current playback position (save button in the player).  
-- Dark-themed dashboard (`videos.html`, `timestamps.html`) with thumbnails and channel names, kept in sync in real time, reachable from the popup (grid icon); the settings page is one gear-icon click away in the popup and every page header.  
+### Hide Shorts and Reels
+
+- YouTube Shorts shelves (home and watch pages) and Facebook Reels sections are hidden the instant they appear (`hide.css`) and then removed from the page by the content script.
+- Each can be switched off on the Settings page. The switch applies to open tabs without a reload.
+
+### Block websites
+
+- Add any site on the Settings page (typed as `reddit.com` or pasted as a full URL). Subdomains are blocked too; look-alikes such as `facebook.com.evil.com` are not.
+- Per-site schedule: always, or a time range on chosen days of the week. Overnight ranges (22:00 to 06:00) work. Sites can be paused with a switch without losing their schedule.
+- Blocking uses `declarativeNetRequest` redirect rules, so a blocked site is stopped before it loads: no flash of content. `background.js` recomputes the rules whenever the settings change and at every schedule boundary (via `chrome.alarms`), and redirects tabs already open on a site that just became blocked.
+- The blocked page (`blocked.html`) names the site, explains the schedule in plain words ("Blocked from 1:00 PM to 6:00 PM on Fridays and Saturdays") and follows settings changes live.
+- Nothing is blocked by default.
+
+### Temporary unblock with a PIN
+
+- With a PIN set, the blocked page offers to unblock the site for 5, 15, 30 or 60 minutes. The background worker checks the PIN, lifts the rule and re-blocks when the time is up.
+- The PIN is a self-control aid, not security: it is stored as a plain SHA-256 digest and can be changed or removed on the Settings page without knowing it. Removing it also clears active temporary unblocks.
+
+### YouTube bookmarks
+
+- Bookmark the current timestamp from a button in the player; the popup lists the timestamps of the video you are watching, with play and delete.
+- Save the whole video to playlists from a "Save to…" panel in the player (works in fullscreen). *Favorites* and *Watch Later* always exist; custom playlists can be created, renamed and deleted.
+- Dashboard pages: `videos.html` (recent and all bookmarked videos, playlists), `playlist.html` (one playlist) and `timestamps.html` (timestamps grouped per video) with thumbnails, channel names, pagination and undo for deletions. They update in real time when bookmarks change anywhere.
+
+### Entry points
+
+- Popup: your timestamps for the current video, a grid icon for the dashboard and a gear icon for Settings.
+- Every extension page has a gear "Settings" link in its header next to the Attention brand; the bookmark tabs live on the bookmark pages.
+
+## Permissions
+
+| Permission | Why |
+|---|---|
+| `storage` | Settings (sync) and bookmarks (local) |
+| `tabs` | Notify the content script of YouTube navigations; redirect tabs already open on a newly blocked site |
+| `alarms` | Wake the service worker at schedule boundaries and unblock expiries |
+| `declarativeNetRequest` | Redirect blocked sites before they load |
+| `<all_urls>` (host) | Required for redirect rules to apply to whichever sites the user blocks. Content scripts still run only on youtube.com and facebook.com |
+
+## Project layout
+
+| File | Role |
+|---|---|
+| `manifest.json` | MV3 manifest |
+| `background.js` | Module service worker: blocking rules, alarms, temporary-unblock messages, storage migration |
+| `contentScript.js` | Runs on YouTube and Facebook: Shorts/Reels removal, player bookmark buttons, "Save to…" panel |
+| `hide.css`, `player-buttons.css` | Injected with the content script |
+| `settingsStore.js` | Settings data and pure logic (domain normalization, schedules, rule building, PIN, temporary unblocks) |
+| `bookmarkStore.js` | Bookmarked videos and playlists |
+| `icons.js` | SVG icon registry shared by every surface |
+| `popup.html/js/css` | Toolbar popup |
+| `videos.html`, `playlist.html`, `timestamps.html`, `dashboard.js/css` | Bookmark dashboard |
+| `settings.html/js/css` | Settings page |
+| `blocked.html/js/css` | Page shown for a blocked site |
+| `utils.js` | Active-tab helper for the popup |
+| `tests/unit`, `tests/e2e` | Vitest and Playwright suites |
+| `scripts/package.sh` | Zips the extension for the Web Store |
 
 ## Development
 
@@ -66,8 +117,8 @@ folder unpacked is all that is required for development.
 
 ## Future Enhancements
 
-- Customization page for managing blocked sites and settings.  
-- Fix for the bookmark button bug.  
-- LLM integration for summarizing content across pages.  
+- Preserve the full original URL through the block redirect, so "continue" after an unblock returns to the exact page.
+- Usage statistics (time saved, blocks per day) on the dashboard.
+- LLM integration for summarizing content across pages.
 
 Keep your focus sharp and distractions at bay with **Attention**! 🧠✨

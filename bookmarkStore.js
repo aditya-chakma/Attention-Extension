@@ -3,7 +3,7 @@
  * "Save to playlist" panel) and the dashboard pages.
  *
  * Loaded two ways, like icons.js: as a content script before contentScript.js
- * (see manifest.json) and via `import "./bookmarkStore.js"` from extension
+ * (see manifest.json) and via `import "./bookmarkStore.js"` from the dashboard
  * pages. Publishes globalThis.ATTENTION_STORE.
  *
  * Storage (chrome.storage.local, JSON strings; bookmark data is kept per
