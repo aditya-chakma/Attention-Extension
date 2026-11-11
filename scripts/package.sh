@@ -30,6 +30,9 @@ FILES=(
     timestamps.html
     playlist.html
     dashboard.js
+    settings.html
+    settings.js
+    settings.css
     dashboard.css
     assets
     LICENSE

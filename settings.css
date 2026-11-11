@@ -1,0 +1,299 @@
+/* Settings page: sections, site rows, schedule editor, switches */
+
+.settings-panel {
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.settings-section h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+}
+
+.section-hint {
+    margin: 0 0 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* ---- Blocked sites ---- */
+
+.add-site-form {
+    display: flex;
+    gap: 8px;
+}
+
+.add-site-form input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+}
+
+.add-site-form input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+#add-site-error {
+    margin-top: 6px;
+}
+
+.site-list {
+    list-style: none;
+    margin: 16px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.site-row {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background-color: var(--bg);
+    padding: 10px 14px;
+}
+
+.site-row.disabled .site-domain {
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.site-row-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.site-domain {
+    font-size: 15px;
+    font-weight: bold;
+    overflow-wrap: anywhere;
+}
+
+.site-summary {
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.site-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.site-empty {
+    margin: 16px 0 0;
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 14px;
+}
+
+/* ---- Schedule editor ---- */
+
+.schedule-editor {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.schedule-modes {
+    display: flex;
+    gap: 16px;
+    font-size: 14px;
+}
+
+.schedule-modes label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.schedule-times {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.schedule-times input {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    color-scheme: dark;
+}
+
+.schedule-times input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.day-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.day-chip {
+    cursor: pointer;
+}
+
+.day-chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.day-chip span {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.day-chip input:checked + span {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.day-chip input:focus-visible + span {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.schedule-hint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+/* ---- Switches (enable/disable, Shorts & Reels) ---- */
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 360px;
+    padding: 10px 0;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex: none;
+}
+
+.switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.switch .slider {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background-color: var(--border);
+    transition: background-color 0.15s;
+}
+
+.switch .slider::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: var(--text);
+    transition: transform 0.15s;
+}
+
+.switch input:checked + .slider {
+    background-color: var(--accent);
+}
+
+.switch input:checked + .slider::before {
+    transform: translateX(16px);
+    background-color: var(--bg);
+}
+
+.switch input:focus-visible + .slider {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* ---- PIN ---- */
+
+.pin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 360px;
+}
+
+.pin-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.pin-form input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+}
+
+.pin-form input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.pin-status {
+    margin: 0 0 10px;
+    font-size: 14px;
+}
+
+.pin-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.pin-notice {
+    color: var(--accent);
+    font-size: 13px;
+}
+
+.pin-notice:empty {
+    display: none;
+}

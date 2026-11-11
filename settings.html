@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Attention — Settings</title>
+        <link href="dashboard.css" rel="stylesheet" type="text/css" />
+        <link href="settings.css" rel="stylesheet" type="text/css" />
+        <script type="module" src="settings.js"></script>
+    </head>
+    <body>
+        <header>
+            <a class="brand" href="videos.html" title="Go to bookmarked videos">
+                <img class="logo" src="assets/ext-icon.png" alt="" />
+                <span>Attention</span>
+            </a>
+        </header>
+
+        <nav class="tabs">
+            <a id="tab-videos" class="tab" href="videos.html">Bookmarked videos</a>
+            <a id="tab-timestamps" class="tab" href="timestamps.html">Bookmarked timestamps</a>
+            <a id="tab-settings" class="tab active" href="settings.html" aria-current="page">Settings</a>
+        </nav>
+
+        <main>
+            <section class="panel settings-panel">
+                <section class="settings-section" aria-labelledby="blocked-sites-title">
+                    <h2 id="blocked-sites-title">Blocked sites</h2>
+                    <p class="section-hint">
+                        Blocked sites (and their subdomains) are stopped before they load. Give a site a schedule to
+                        block it only at certain times.
+                    </p>
+                    <form id="add-site-form" class="add-site-form">
+                        <input
+                            id="add-site-input"
+                            type="text"
+                            placeholder="e.g. reddit.com"
+                            aria-label="Site to block"
+                            autocomplete="off"
+                        />
+                        <button type="submit" class="btn btn-primary">Add site</button>
+                    </form>
+                    <div id="add-site-error" class="form-error" role="alert"></div>
+                    <!-- settings.js renders the site rows -->
+                    <ul id="site-list" class="site-list"></ul>
+                </section>
+
+                <section class="settings-section" aria-labelledby="toggles-title">
+                    <h2 id="toggles-title">Shorts &amp; Reels</h2>
+                    <p class="section-hint">Remove the endless-scroll sections while you browse.</p>
+                    <label class="toggle-row">
+                        <span>Hide YouTube Shorts</span>
+                        <span class="switch">
+                            <input id="toggle-shorts" type="checkbox" />
+                            <span class="slider"></span>
+                        </span>
+                    </label>
+                    <label class="toggle-row">
+                        <span>Hide Facebook Reels</span>
+                        <span class="switch">
+                            <input id="toggle-reels" type="checkbox" />
+                            <span class="slider"></span>
+                        </span>
+                    </label>
+                </section>
+
+                <section id="pin" class="settings-section" aria-labelledby="pin-title">
+                    <h2 id="pin-title">Unblock PIN</h2>
+                    <p class="section-hint">
+                        With a PIN set, a blocked page offers to lift the block for a few minutes. It is a speed bump
+                        for your own impulses, not a lock: you can reset it here at any time without knowing it.
+                    </p>
+                    <!-- settings.js renders the form for the current state -->
+                    <div id="pin-body"></div>
+                </section>
+            </section>
+        </main>
+    </body>
+</html>
