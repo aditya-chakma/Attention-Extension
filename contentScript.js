@@ -580,6 +580,13 @@
         }
     };
 
+    // Reels removal must not depend on the background message: the very first
+    // navigation can race extension startup and its tabs.onUpdated events can
+    // be missed entirely (YouTube already self-starts the same way below)
+    if (window.location.hostname.includes("facebook.com")) {
+        startRemoval("fb");
+    }
+
     if (window.location.hostname.includes("youtube.com")) {
         onYouTubeNavigation();
         document.addEventListener("yt-navigate-finish", onYouTubeNavigation);

@@ -177,4 +177,25 @@ test.describe("YouTube timestamp bookmarks", () => {
         expect(dashboardPage.url()).toBe(`chrome-extension://${extensionId}/videos.html`);
         await expect(dashboardPage.locator(".tab[aria-current='page']")).toHaveText("Bookmarked videos");
     });
+
+    test("the popup settings gear sits right of the dashboard icon and opens the settings page", async ({
+        page,
+        context,
+        extensionId,
+    }) => {
+        await page.goto(`chrome-extension://${extensionId}/popup.html`);
+        const dashboard = page.locator("#open-dashboard");
+        const gear = page.locator("#open-settings");
+        await expect(gear.locator("svg")).toHaveCount(1);
+
+        const dashboardBox = await dashboard.boundingBox();
+        const gearBox = await gear.boundingBox();
+        expect(gearBox.x).toBeGreaterThan(dashboardBox.x);
+
+        const [settingsPage] = await Promise.all([context.waitForEvent("page"), gear.click()]);
+        await settingsPage.waitForLoadState();
+
+        expect(settingsPage.url()).toBe(`chrome-extension://${extensionId}/settings.html`);
+        await expect(settingsPage.locator("#settings-link")).toHaveAttribute("aria-current", "page");
+    });
 });

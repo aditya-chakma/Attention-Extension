@@ -79,6 +79,7 @@
 .popup-header {
   display: flex;
   justify-content: flex-end;
+  gap: 2px;
   padding: 6px 6px 0;
 }
 

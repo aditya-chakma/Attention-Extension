@@ -30,6 +30,18 @@ describe("Facebook", () => {
         expect(getURLCallsAtLoad).not.toContain("blocked.html");
     });
 
+    it("removes Reels sections without waiting for a background message", async () => {
+        // The first navigation can race extension startup and lose the
+        // tabs.onUpdated message, so removal self-starts from the hostname
+        const reel = document.createElement("div");
+        reel.setAttribute("aria-label", "Reels");
+        document.body.append(reel);
+
+        await flushRemoval();
+
+        expect(document.querySelectorAll('[aria-label="Reels"]')).toHaveLength(0);
+    });
+
     it("removes Reels sections when told the tab is Facebook", () => {
         const reel = document.createElement("div");
         reel.setAttribute("aria-label", "Reels");

@@ -86,14 +86,19 @@ const addControlButton = (controlParent, label, iconName, eventListener) => {
     controlParent.appendChild(button);
 };
 
+// Icon-only header button that opens an extension page in a new tab
+const bindHeaderButton = (id, iconName, pageFile) => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.innerHTML = globalThis.ATTENTION_ICONS.markup[iconName];
+    button.addEventListener("click", () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL(pageFile) });
+    });
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
-    const dashboardBtn = document.getElementById("open-dashboard");
-    if (dashboardBtn) {
-        dashboardBtn.innerHTML = globalThis.ATTENTION_ICONS.markup.dashboardGrid;
-        dashboardBtn.addEventListener("click", () => {
-            chrome.tabs.create({ url: chrome.runtime.getURL("videos.html") });
-        });
-    }
+    bindHeaderButton("open-dashboard", "dashboardGrid", "videos.html");
+    bindHeaderButton("open-settings", "gear", "settings.html");
 
     const activeTab = await getActiveTabURL();
 
