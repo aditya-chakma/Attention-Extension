@@ -239,7 +239,7 @@ describe("background.js blocking rules", () => {
 
         expect(chrome.tabs.update).toHaveBeenCalledTimes(1);
         expect(chrome.tabs.update).toHaveBeenCalledWith(1, {
-            url: "chrome-extension://test-extension-id/blocked.html?site=facebook.com",
+            url: "chrome-extension://test-extension-id/blocked.html?site=facebook.com&reason=auto",
         });
     });
 
@@ -415,6 +415,48 @@ describe("background.js TEMP_UNBLOCK message", () => {
         const { response } = await send({ type: "TEMP_UNBLOCK", domain: "facebook.com", minutes: 0, pin: "1234" });
 
         expect(response).toEqual({ ok: false, error: "Choose how long to unblock for" });
+    });
+
+    describe("statistics", () => {
+        const STATS_TODAY = "attention_stats_day_2026-11-13";
+        const statsToday = () => JSON.parse(chrome.__storageData[STATS_TODAY] ?? "null");
+
+        it("records a granted unblock with its duration, per site", async () => {
+            storeSites(site());
+            await SETTINGS().setPin("1234");
+
+            await send({ type: "TEMP_UNBLOCK", domain: "facebook.com", minutes: 15, pin: "1234" });
+            await send({ type: "TEMP_UNBLOCK", domain: "facebook.com", minutes: 30, pin: "1234" });
+
+            expect(statsToday().unblocks).toEqual({ "facebook.com": { count: 2, minutes: 45 } });
+        });
+
+        it.each([
+            ["no PIN is set", false, { minutes: 15, pin: "1234" }],
+            ["the PIN is wrong", true, { minutes: 15, pin: "0000" }],
+            ["the duration is invalid", true, { minutes: 0, pin: "1234" }],
+        ])("records nothing when %s", async (_, withPin, fields) => {
+            storeSites(site());
+            if (withPin) await SETTINGS().setPin("1234");
+
+            await send({ type: "TEMP_UNBLOCK", domain: "facebook.com", ...fields });
+
+            expect(statsToday()).toBeNull();
+        });
+
+        it("still unblocks when the statistic can't be recorded", async () => {
+            const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+            storeSites(site({ domain: "Weird_Domain" }));
+            await SETTINGS().setPin("1234");
+
+            // statsStore.js rejects the domain; the unblock itself must go through
+            const { response } = await send({ type: "TEMP_UNBLOCK", domain: "Weird_Domain", minutes: 5, pin: "1234" });
+
+            expect(response.ok).toBe(true);
+            expect(statsToday()).toBeNull();
+            expect(errorSpy).toHaveBeenCalledWith("Attention: recording a statistic failed", expect.any(Error));
+            errorSpy.mockRestore();
+        });
     });
 });
 

@@ -13,6 +13,26 @@ const goTo = (path) => {
     document.dispatchEvent(new Event("yt-navigate-finish"));
 };
 
+// STATS_EVENT messages the content script sent to the background worker
+const statsReports = () =>
+    chrome.runtime.sendMessage.mock.calls.map(([message]) => message).filter((m) => m.type === "STATS_EVENT");
+
+// A shelf holding the given Shorts, linked twice each like YouTube's
+// thumbnail + title
+const shelfWithShorts = (createShelf, ...ids) => {
+    const shelf = createShelf();
+    for (const id of ids) {
+        const item = document.createElement("ytm-shorts-lockup-view-model");
+        for (let i = 0; i < 2; i++) {
+            const link = document.createElement("a");
+            link.href = `/shorts/${id}?feature=shelf`;
+            item.append(link);
+        }
+        shelf.append(item);
+    }
+    return shelf;
+};
+
 let onMessage;
 let logSpy;
 let atLoad; // snapshot taken right after the script ran, before any per-test mock reset
@@ -36,6 +56,7 @@ beforeAll(async () => {
         reelShelves: document.querySelectorAll("ytd-reel-shelf-renderer").length,
         logs: logSpy.mock.calls.map(([message]) => message),
         getURLCalls: chrome.runtime.getURL.mock.calls.map(([path]) => path),
+        statsReports: statsReports(),
     };
 });
 
@@ -92,6 +113,61 @@ describe("YouTube home page", () => {
         await flushRemoval();
 
         expect(logSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe("removal statistics", () => {
+    const removal = (count) => ({ type: "STATS_EVENT", event: { event: "removal", kind: "shorts", count } });
+
+    it("reports the shelves removed at load (empty shelves count as one Short each)", () => {
+        expect(atLoad.statsReports).toEqual([removal(2)]);
+    });
+
+    it("counts the distinct Shorts inside each removed shelf, in one report per sweep", async () => {
+        document.body.append(shelfWithShorts(richSection, "a1", "b2", "c3"), shelfWithShorts(richSection, "d4"));
+
+        await flushRemoval();
+
+        expect(statsReports()).toEqual([removal(4)]);
+    });
+
+    it("counts Shorts in reel shelves removed on a watch page", () => {
+        document.body.append(shelfWithShorts(reelShelf, "x1", "x2"));
+
+        goTo("/watch?v=abc123");
+
+        expect(statsReports()).toEqual([removal(2)]);
+    });
+
+    it("ignores links that aren't Shorts", async () => {
+        const shelf = shelfWithShorts(richSection, "a1");
+        const watchLink = document.createElement("a");
+        watchLink.href = "/watch?v=zzz";
+        shelf.append(watchLink);
+        document.body.append(shelf);
+
+        await flushRemoval();
+
+        expect(statsReports()).toEqual([removal(1)]);
+    });
+
+    it("reports nothing when nothing is removed", async () => {
+        document.body.append(document.createElement("div"), reelShelf()); // reel shelves stay on the home page
+
+        await flushRemoval();
+
+        expect(statsReports()).toEqual([]);
+    });
+
+    it("keeps removing when the extension can't be reached", async () => {
+        chrome.runtime.sendMessage.mockImplementation(() => {
+            throw new Error("Extension context invalidated.");
+        });
+        document.body.append(richSection());
+
+        await flushRemoval();
+
+        expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(0);
     });
 });
 
@@ -848,6 +924,7 @@ describe("Hide YouTube Shorts toggle", () => {
 
     it("turning the toggle off marks <html> so hide.css shows Shorts, and stops removing them", async () => {
         await setToggle(false);
+        chrome.runtime.sendMessage.mockClear();
 
         expect(document.documentElement.hasAttribute("data-attention-show-shorts")).toBe(true);
         expect(document.documentElement.hasAttribute("data-attention-show-reels")).toBe(false);
@@ -855,6 +932,8 @@ describe("Hide YouTube Shorts toggle", () => {
         document.body.append(richSection());
         await flushRemoval();
         expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(1);
+        // Shown Shorts aren't blocked ones
+        expect(statsReports()).toEqual([]);
     });
 
     it("turning it back on removes the attribute and sweeps what is already on the page", async () => {

@@ -82,7 +82,7 @@ test.describe("Website blocking", () => {
 
         const site = await serviceWorker.evaluate(() => globalThis.ATTENTION_SETTINGS.addSite("example.com"));
         // Open tabs on the site are sent to the blocked page as soon as the rules update
-        await page.waitForURL(`chrome-extension://${extensionId}/blocked.html?site=example.com`);
+        await page.waitForURL(`chrome-extension://${extensionId}/blocked.html?site=example.com&reason=auto`);
 
         await serviceWorker.evaluate((id) => globalThis.ATTENTION_SETTINGS.removeSite(id), site.id);
         await expect

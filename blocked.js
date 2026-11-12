@@ -60,6 +60,24 @@ const requestedDomain = () => {
 
 const siteUrl = (domain) => "https://" + domain + "/";
 
+// ---- Blocked-visit statistic -----------------------------------------------
+// One visit per attempt to open the site. Not counted: reloading this page,
+// coming back to it with back/forward, and tabs the background worker moved
+// here on its own (reason=auto, e.g. a schedule starting while the site was
+// open). Written by background.js; see statsStore.js.
+
+const STATS_MESSAGE = "STATS_EVENT";
+
+const isUserAttempt = () => {
+    if (new URLSearchParams(window.location.search).get("reason") === "auto") return false;
+    const [navigation] = performance.getEntriesByType?.("navigation") ?? [];
+    return !navigation || navigation.type === "navigate";
+};
+
+const reportBlockedVisit = (domain) => {
+    chrome.runtime.sendMessage({ type: STATS_MESSAGE, event: { event: "blockedVisit", domain } })?.catch(() => {});
+};
+
 const renderHeading = (card, domain) => {
     const heading = el("h1");
     if (domain) {
@@ -156,7 +174,9 @@ const renderLinks = (card, hasPin) => {
     card.appendChild(links);
 };
 
-const render = async () => {
+// countVisit is only set for the first render of a page load; re-renders
+// caused by settings changes must not count the visit again
+const render = async ({ countVisit = false } = {}) => {
     const card = document.getElementById("blocked");
     if (!card) return;
 
@@ -181,6 +201,10 @@ const render = async () => {
         return;
     }
 
+    // Only sites on the list are counted: the page opened by hand, or for a
+    // site removed since, says nothing about what the user tried to visit
+    if (countVisit && site && isUserAttempt()) reportBlockedVisit(domain);
+
     if (site) {
         card.appendChild(el("p", "blocked-reason", describeSchedule(site.schedule)));
         if (site.schedule) card.appendChild(el("p", "blocked-until", "Blocked until " + formatClock(site.schedule.end)));
@@ -198,7 +222,7 @@ const render = async () => {
 document.addEventListener("DOMContentLoaded", () => {
     const icon = document.querySelector("#settings-link .icon");
     if (icon) icon.innerHTML = globalThis.ATTENTION_ICONS.markup.gear;
-    render();
+    render({ countVisit: true });
 });
 
 // Follow changes made elsewhere while this page is open: the site removed from

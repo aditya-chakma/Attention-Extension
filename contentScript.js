@@ -55,6 +55,32 @@
         if (area === "sync" && SETTINGS.SETTINGS_KEY in changes) loadHideToggles();
     });
 
+    // ---- Removal statistics (recorded by background.js, see statsStore.js)
+    // Each removed section is counted by the Shorts/Reels it holds: the
+    // distinct /shorts/<id> or /reel/<id> links in it. A section removed
+    // before YouTube/Facebook filled it in still counts as one, so the totals
+    // are a lower bound.
+    const STATS_MESSAGE = "STATS_EVENT";
+    const KIND_FOR_SOURCE = { "fb": "reels", "yt-home": "shorts", "yt-watch": "shorts" };
+    const ITEM_LINK_PATTERNS = { shorts: /\/shorts\/([^/?#]+)/, reels: /\/reels?\/([^/?#]+)/ };
+
+    const countItems = (section, kind) => {
+        const ids = new Set();
+        for (const link of section.querySelectorAll("a[href]")) {
+            const match = link.getAttribute("href").match(ITEM_LINK_PATTERNS[kind]);
+            if (match) ids.add(match[1]);
+        }
+        return Math.max(1, ids.size);
+    };
+
+    const reportRemoval = (kind, count) => {
+        try {
+            chrome.runtime.sendMessage({ type: STATS_MESSAGE, event: { event: "removal", kind, count } })?.catch(() => {});
+        } catch {
+            // The extension was reloaded or updated: this page's script is orphaned
+        }
+    };
+
     let activeSource = null;
     let sweepScheduled = false;
     let domObserver = null;
@@ -65,7 +91,13 @@
 
         const nodes = document.querySelectorAll(REMOVAL_SELECTORS[activeSource]);
         if (nodes.length > 0) {
-            nodes.forEach((el) => el.remove());
+            const kind = KIND_FOR_SOURCE[activeSource];
+            let items = 0;
+            nodes.forEach((el) => {
+                items += countItems(el, kind);
+                el.remove();
+            });
+            reportRemoval(kind, items);
 
             if (activeSource === "fb") {
                 console.log("Attention extension has removed " + nodes.length + " reels");

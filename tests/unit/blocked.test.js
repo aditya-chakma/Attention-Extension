@@ -271,3 +271,93 @@ describe("blocked page: temporary unblock", () => {
         expect(chrome.tabs.update).toHaveBeenCalled();
     });
 });
+
+describe("blocked page: visit statistic", () => {
+    const visitReports = () =>
+        chrome.runtime.sendMessage.mock.calls
+            .map(([message]) => message)
+            .filter((message) => message.type === "STATS_EVENT");
+
+    const navigationType = (type) => {
+        vi.spyOn(performance, "getEntriesByType").mockImplementation((entryType) =>
+            entryType === "navigation" ? [{ type }] : []
+        );
+    };
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("reports one visit when a blocked site is opened", async () => {
+        storeSites(site());
+        navigationType("navigate");
+
+        await renderPage();
+
+        expect(visitReports()).toEqual([
+            { type: "STATS_EVENT", event: { event: "blockedVisit", domain: "facebook.com" } },
+        ]);
+    });
+
+    it("reports the normalized domain", async () => {
+        storeSites(site());
+        await renderPage("?site=WWW.Facebook.com");
+
+        expect(visitReports()[0].event.domain).toBe("facebook.com");
+    });
+
+    it.each(["reload", "back_forward"])("doesn't count a %s of the blocked page", async (type) => {
+        storeSites(site());
+        navigationType(type);
+
+        await renderPage();
+
+        expect(visitReports()).toEqual([]);
+    });
+
+    it("doesn't count tabs the background worker moved here itself", async () => {
+        storeSites(site());
+
+        await renderPage("?site=facebook.com&reason=auto");
+
+        expect(text("h1")).toBe("facebook.com is blocked");
+        expect(visitReports()).toEqual([]);
+    });
+
+    it("doesn't count again when the page re-renders after a settings change", async () => {
+        storeSites(site());
+        await renderPage();
+
+        chrome.storage.sync.set({ [SETTINGS_KEY]: JSON.stringify({ pinHash: "abc" }) });
+        await flushPromises();
+
+        expect(document.querySelector("#unblock-form")).not.toBeNull();
+        expect(visitReports()).toHaveLength(1);
+    });
+
+    it.each([
+        ["the site is not blocked right now", () => storeSites(site({ enabled: false }))],
+        ["the site is not on the list", () => storeSites()],
+    ])("doesn't count when %s", async (_, seed) => {
+        seed();
+
+        await renderPage();
+
+        expect(visitReports()).toEqual([]);
+    });
+
+    it("doesn't count without a usable ?site= parameter", async () => {
+        await renderPage("?site=<script>");
+
+        expect(visitReports()).toEqual([]);
+    });
+
+    it("still renders when the worker can't be reached", async () => {
+        storeSites(site());
+        chrome.runtime.sendMessage.mockRejectedValue(new Error("Receiving end does not exist"));
+
+        await renderPage();
+
+        expect(text("h1")).toBe("facebook.com is blocked");
+    });
+});

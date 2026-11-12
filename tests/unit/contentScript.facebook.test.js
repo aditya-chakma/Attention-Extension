@@ -77,6 +77,36 @@ describe("Facebook", () => {
     });
 });
 
+describe("Reels removal statistics", () => {
+    const statsReports = () =>
+        chrome.runtime.sendMessage.mock.calls.map(([message]) => message).filter((m) => m.type === "STATS_EVENT");
+
+    it("counts the distinct reels linked from each removed section", async () => {
+        const section = document.createElement("div");
+        section.setAttribute("aria-label", "Reels");
+        for (const href of [
+            "https://www.facebook.com/reel/111/?s=fb_shorts_tab",
+            "https://www.facebook.com/reel/111/", // same reel, second link
+            "https://www.facebook.com/reel/222",
+            "/reel/333/",
+            "https://www.facebook.com/reels/", // the Reels tab, not a reel
+        ]) {
+            const link = document.createElement("a");
+            link.setAttribute("href", href);
+            section.append(link);
+        }
+        const empty = document.createElement("div");
+        empty.setAttribute("aria-label", "Reels");
+        document.body.append(section, empty);
+
+        await flushRemoval();
+
+        expect(statsReports()).toEqual([
+            { type: "STATS_EVENT", event: { event: "removal", kind: "reels", count: 4 } },
+        ]);
+    });
+});
+
 describe("Hide Facebook Reels toggle", () => {
     const SETTINGS_KEY = "attention_settings";
     const reel = () => {

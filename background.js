@@ -56,7 +56,11 @@ async function migrateBookmarksToLocal() {
 
 const TRANSITION_ALARM = "attention-block-transition";
 
-const blockedPageUrl = (domain) => chrome.runtime.getURL("blocked.html?site=" + encodeURIComponent(domain));
+// Tabs the worker moves to the blocked page itself (a schedule starting, an
+// unblock running out, a site just added) carry reason=auto, so the page knows
+// the user didn't try to open the site and doesn't count it as a visit
+const blockedPageUrl = (domain) =>
+    chrome.runtime.getURL("blocked.html?site=" + encodeURIComponent(domain) + "&reason=auto");
 
 const sameRule = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -149,6 +153,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (sitesChanged || unblocksChanged) syncRules();
 });
 
+// ---- Statistics ------------------------------------------------------------
+
+// A statistic must never break what it describes: failures (including an
+// event statsStore.js rejects) are logged and otherwise ignored
+const recordStat = (event) =>
+    Promise.resolve()
+        .then(() => STATS.record(event))
+        .catch((error) => console.error("Attention: recording a statistic failed", error));
+
 // ---- Messages from pages and content scripts ------------------------------
 
 // The blocked page asks for a temporary unblock. The PIN is checked here so the
@@ -158,9 +171,12 @@ async function handleTempUnblock(message) {
     if (!pinHash) return { ok: false, error: "Set a PIN in Settings to unblock sites temporarily" };
     if (!(await SETTINGS.verifyPin(message.pin))) return { ok: false, error: "Wrong PIN" };
 
-    const expiresAt = await SETTINGS.grantTempUnblock(message.domain, Number(message.minutes));
+    const minutes = Number(message.minutes);
+    const expiresAt = await SETTINGS.grantTempUnblock(message.domain, minutes);
     // Rules are updated before replying so the page can navigate right away
     await syncRules();
+    // Not awaited: the reply shouldn't wait for the statistics
+    recordStat({ event: "unblock", domain: message.domain, minutes: Math.max(1, Math.round(minutes)) });
     return { ok: true, expiresAt };
 }
 
