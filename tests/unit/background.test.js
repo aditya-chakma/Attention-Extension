@@ -37,7 +37,15 @@ const storeSites = (...sites) => {
     chrome.__syncData[SITES_KEY] = JSON.stringify({ nextRuleId: sites.length + 1, sites });
 };
 
-const ruleIds = () => chrome.__dynamicRules.map((r) => r.id).sort();
+// The Shorts/Reels page redirects (on by default) use ids far above the
+// blocked sites'; most tests only look at the site rules
+const SHORTS_RULE_ID = 1_000_001;
+const REELS_RULE_ID = 1_000_002;
+const isSiteRule = (rule) => rule.id < SHORTS_RULE_ID;
+const siteRules = () => chrome.__dynamicRules.filter(isSiteRule);
+const ruleIds = () => siteRules().map((r) => r.id).sort();
+const shortsReelsRuleIds = () => chrome.__dynamicRules.filter((r) => !isSiteRule(r)).map((r) => r.id).sort();
+const shortsReelsRules = () => globalThis.ATTENTION_SETTINGS.buildShortsReelsRules();
 
 describe("background.js bookmark migration (sync -> local)", () => {
     const runMigration = async () => {
@@ -116,7 +124,9 @@ describe("background.js bookmark migration (sync -> local)", () => {
         expect(chrome.__storageData[MIGRATION_FLAG]).toBe(true);
         expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
         expect(chrome.__syncData).toEqual({});
-        expect(chrome.__dynamicRules).toEqual([]);
+        expect(siteRules()).toEqual([]);
+        // Shorts and Reels pages are redirected out of the box (toggles default to on)
+        expect(shortsReelsRuleIds()).toEqual([SHORTS_RULE_ID, REELS_RULE_ID]);
     });
 
     it("writes to local before removing from sync so a failure cannot lose data", async () => {
@@ -166,7 +176,7 @@ describe("background.js blocking rules", () => {
 
         await startup();
 
-        expect(chrome.__dynamicRules).toEqual([
+        expect(siteRules()).toEqual([
             {
                 id: 1,
                 priority: 1,
@@ -198,7 +208,8 @@ describe("background.js blocking rules", () => {
 
     it("removes rules that no longer apply and keeps unchanged ones untouched", async () => {
         chrome.__dynamicRules.push(
-            ...globalThis.ATTENTION_SETTINGS.buildRules([site(), site({ domain: "reddit.com", ruleId: 2 })])
+            ...globalThis.ATTENTION_SETTINGS.buildRules([site(), site({ domain: "reddit.com", ruleId: 2 })]),
+            ...shortsReelsRules()
         );
         storeSites(site()); // reddit.com was removed from the settings
 
@@ -209,7 +220,7 @@ describe("background.js blocking rules", () => {
     });
 
     it("does not call updateDynamicRules when nothing changed", async () => {
-        chrome.__dynamicRules.push(...globalThis.ATTENTION_SETTINGS.buildRules([site()]));
+        chrome.__dynamicRules.push(...globalThis.ATTENTION_SETTINGS.buildRules([site()]), ...shortsReelsRules());
         storeSites(site());
 
         await startup();
@@ -223,7 +234,7 @@ describe("background.js blocking rules", () => {
 
         await startup();
 
-        expect(chrome.__dynamicRules.map((r) => r.condition.urlFilter)).toEqual(["||reddit.com^"]);
+        expect(siteRules().map((r) => r.condition.urlFilter)).toEqual(["||reddit.com^"]);
     });
 
     it("sends open tabs on a newly blocked site to the blocked page", async () => {
@@ -309,15 +320,68 @@ describe("background.js blocking rules", () => {
         expect(ruleIds()).toEqual([1]);
     });
 
-    it("ignores unrelated storage changes (bookmarks, other settings)", async () => {
+    it("ignores unrelated storage changes (bookmarks, statistics, wrong area)", async () => {
         storeSites(site());
 
         onStorageChanged({ vid1: { newValue: "[]" } }, "local");
-        onStorageChanged({ [SETTINGS_KEY]: { newValue: "{}" } }, "sync");
+        onStorageChanged({ "attention_stats_day_2026-11-13": { newValue: "{}" } }, "local");
         onStorageChanged({ [SITES_KEY]: { newValue: "{}" } }, "local"); // wrong area
+        onStorageChanged({ [SETTINGS_KEY]: { newValue: "{}" } }, "local"); // wrong area
         await settle();
 
         expect(chrome.declarativeNetRequest.getDynamicRules).not.toHaveBeenCalled();
+    });
+
+    describe("Shorts and Reels pages", () => {
+        const setToggles = (hideShortsReels) => {
+            chrome.__syncData[SETTINGS_KEY] = JSON.stringify({ hideShortsReels });
+        };
+
+        it("redirects both by default, alongside the blocked sites", async () => {
+            storeSites(site());
+
+            await startup();
+
+            expect(ruleIds()).toEqual([1]);
+            expect(shortsReelsRuleIds()).toEqual([SHORTS_RULE_ID, REELS_RULE_ID]);
+            expect(chrome.__dynamicRules.find((r) => r.id === SHORTS_RULE_ID).condition.regexFilter).toContain("shorts");
+        });
+
+        it.each([
+            [{ youtubeShorts: false, facebookReels: true }, [REELS_RULE_ID]],
+            [{ youtubeShorts: true, facebookReels: false }, [SHORTS_RULE_ID]],
+            [{ youtubeShorts: false, facebookReels: false }, []],
+        ])("follows the toggles %j", async (toggles, expected) => {
+            setToggles(toggles);
+
+            await startup();
+
+            expect(shortsReelsRuleIds()).toEqual(expected);
+        });
+
+        it("re-syncs when a toggle changes, without touching the site rules", async () => {
+            storeSites(site());
+            await startup();
+            chrome.declarativeNetRequest.updateDynamicRules.mockClear();
+
+            setToggles({ youtubeShorts: false, facebookReels: true });
+            onStorageChanged({ [SETTINGS_KEY]: { newValue: chrome.__syncData[SETTINGS_KEY] } }, "sync");
+            await settle();
+
+            expect(shortsReelsRuleIds()).toEqual([REELS_RULE_ID]);
+            expect(chrome.declarativeNetRequest.updateDynamicRules).toHaveBeenCalledWith({
+                removeRuleIds: [SHORTS_RULE_ID],
+                addRules: [],
+            });
+        });
+
+        it("doesn't send open Shorts or Reels tabs anywhere (the content script does)", async () => {
+            chrome.tabs.query.mockResolvedValue([{ id: 1, url: "https://www.youtube.com/shorts/abc" }]);
+
+            await startup();
+
+            expect(chrome.tabs.update).not.toHaveBeenCalled();
+        });
     });
 
     it("collapses overlapping triggers into serialized runs", async () => {

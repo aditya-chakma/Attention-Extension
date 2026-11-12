@@ -191,6 +191,96 @@ describe("buildRules", () => {
     });
 });
 
+describe("shortsReelsToggleFor", () => {
+    it.each([
+        ["https://www.youtube.com/shorts/abc123", "youtubeShorts"],
+        ["https://www.youtube.com/shorts/abc123?feature=share", "youtubeShorts"],
+        ["https://m.youtube.com/shorts", "youtubeShorts"],
+        ["https://youtube.com/shorts/", "youtubeShorts"],
+        ["https://www.youtube.com/Shorts/abc", "youtubeShorts"],
+        ["https://www.facebook.com/reel/123456789/", "facebookReels"],
+        ["https://www.facebook.com/reel/123?s=fb_shorts_tab", "facebookReels"],
+        ["https://m.facebook.com/reels/", "facebookReels"],
+        ["https://www.facebook.com/reels", "facebookReels"],
+    ])("%s -> %s", (url, expected) => {
+        expect(SETTINGS.shortsReelsToggleFor(url)).toBe(expected);
+    });
+
+    it.each([
+        "https://www.youtube.com/",
+        "https://www.youtube.com/watch?v=shorts",
+        "https://www.youtube.com/@channel/shorts",
+        "https://www.youtube.com/shortsfeed",
+        "https://www.youtube.com/results?search_query=shorts",
+        "https://youtube.com.evil.com/shorts/abc",
+        "https://notyoutube.com/shorts/abc",
+        "https://www.facebook.com/",
+        "https://www.facebook.com/reelz",
+        "https://www.facebook.com/someone/videos/reel/1",
+        "https://www.instagram.com/reel/abc/",
+        "https://www.youtube.com#/shorts/x",
+        "not a url",
+    ])("%s is not a Shorts/Reels page", (url) => {
+        expect(SETTINGS.shortsReelsToggleFor(url)).toBeNull();
+    });
+});
+
+describe("buildShortsReelsRules", () => {
+    // What Chrome does with a regexFilter / regexSubstitution rule
+    const redirectOf = (rules, url) => {
+        for (const rule of rules) {
+            const regex = new RegExp(rule.condition.regexFilter, rule.condition.isUrlFilterCaseSensitive ? "" : "i");
+            if (regex.test(url)) return url.replace(regex, rule.action.redirect.regexSubstitution.replace(/\\(\d)/g, "$$$1"));
+        }
+        return null;
+    };
+
+    it("redirects both page kinds by default, with reserved rule ids, for main frames only", () => {
+        const rules = SETTINGS.buildShortsReelsRules();
+        expect(rules.map((r) => r.id)).toEqual([1_000_001, 1_000_002]);
+        expect(SETTINGS.SHORTS_REELS_RULE_IDS).toEqual({ youtubeShorts: 1_000_001, facebookReels: 1_000_002 });
+        for (const rule of rules) {
+            expect(rule.condition.resourceTypes).toEqual(["main_frame"]);
+            expect(rule.action.type).toBe("redirect");
+        }
+    });
+
+    it("only builds the rules whose toggle is on", () => {
+        expect(SETTINGS.buildShortsReelsRules({ youtubeShorts: false, facebookReels: true }).map((r) => r.id)).toEqual([1_000_002]);
+        expect(SETTINGS.buildShortsReelsRules({ youtubeShorts: true, facebookReels: false }).map((r) => r.id)).toEqual([1_000_001]);
+        expect(SETTINGS.buildShortsReelsRules({ youtubeShorts: false, facebookReels: false })).toEqual([]);
+    });
+
+    it.each([
+        ["https://www.youtube.com/shorts/abc123?feature=share", "https://www.youtube.com/#attention-redirect=shorts"],
+        ["https://m.youtube.com/shorts/abc", "https://m.youtube.com/#attention-redirect=shorts"],
+        ["https://youtube.com/shorts", "https://youtube.com/#attention-redirect=shorts"],
+        ["https://www.facebook.com/reel/123456789/?s=x", "https://www.facebook.com/#attention-redirect=reels"],
+        ["https://www.facebook.com/reels/", "https://www.facebook.com/#attention-redirect=reels"],
+    ])("sends %s to %s", (from, to) => {
+        expect(redirectOf(SETTINGS.buildShortsReelsRules(), from)).toBe(to);
+    });
+
+    it("matches the same pages as shortsReelsToggleFor", () => {
+        const urls = [
+            "https://www.youtube.com/shorts/abc",
+            "https://www.youtube.com/",
+            "https://www.youtube.com/watch?v=shorts",
+            "https://www.youtube.com/@channel/shorts",
+            "https://www.youtube.com/shortsfeed",
+            "https://youtube.com.evil.com/shorts/abc",
+            "https://www.facebook.com/reel/1",
+            "https://www.facebook.com/reels",
+            "https://www.facebook.com/reelz",
+            "https://www.facebook.com/someone/videos/reel/1",
+        ];
+        const rules = SETTINGS.buildShortsReelsRules();
+        for (const url of urls) {
+            expect(redirectOf(rules, url) !== null, url).toBe(SETTINGS.shortsReelsToggleFor(url) !== null);
+        }
+    });
+});
+
 describe("nextTransition", () => {
     const always = { id: "s1", ruleId: 1, domain: "facebook.com", enabled: true, schedule: null };
 

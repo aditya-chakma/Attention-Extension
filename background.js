@@ -64,8 +64,11 @@ const blockedPageUrl = (domain) =>
 
 const sameRule = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-async function applyRules(active) {
-    const desired = SETTINGS.buildRules(active);
+// Besides the blocked sites, the rules send youtube.com/shorts and
+// facebook.com/reel(s) pages to the site's home page while the matching
+// Shorts/Reels toggle is on (see buildShortsReelsRules in settingsStore.js)
+async function applyRules(active, hideShortsReels) {
+    const desired = [...SETTINGS.buildRules(active), ...SETTINGS.buildShortsReelsRules(hideShortsReels)];
     const existing = await chrome.declarativeNetRequest.getDynamicRules();
 
     // Replace only what changed; leaving identical rules alone keeps this
@@ -107,8 +110,9 @@ async function doSyncRules() {
     const sites = await SETTINGS.loadBlockedSites();
     const unblocks = await SETTINGS.getTempUnblocks(now.getTime());
     const active = SETTINGS.activeSites(sites, unblocks, now);
+    const { hideShortsReels } = await SETTINGS.loadSettings();
 
-    await applyRules(active);
+    await applyRules(active, hideShortsReels);
     await redirectOpenTabs(active);
     await scheduleNextTransition(sites, unblocks, now);
 }
@@ -148,9 +152,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-    const sitesChanged = area === "sync" && SETTINGS.SITES_KEY in changes;
+    // The settings key also holds the Shorts/Reels toggles (and the PIN hash,
+    // whose changes make for a harmless no-op sync)
+    const syncedChanged = area === "sync" && (SETTINGS.SITES_KEY in changes || SETTINGS.SETTINGS_KEY in changes);
     const unblocksChanged = area === "local" && SETTINGS.TEMP_UNBLOCKS_KEY in changes;
-    if (sitesChanged || unblocksChanged) syncRules();
+    if (syncedChanged || unblocksChanged) syncRules();
 });
 
 // ---- Statistics ------------------------------------------------------------

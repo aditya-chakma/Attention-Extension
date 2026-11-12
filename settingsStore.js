@@ -22,6 +22,13 @@
  *     - attention_temp_unblocks: { "<domain>": expiresAtMs }
  *
  * All values are JSON strings, like the bookmark keys.
+ *
+ * The Shorts/Reels toggles also cover the Shorts and Reels pages themselves
+ * (youtube.com/shorts/..., facebook.com/reel/... and /reels/): with a toggle
+ * on, those pages send the user to the site's home page. Direct loads are
+ * redirected by the declarativeNetRequest rules from buildShortsReelsRules();
+ * in-app navigation never reaches the network layer, so contentScript.js
+ * catches it with shortsReelsToggleFor().
  */
 (() => {
     const SITES_KEY = "attention_blocked_sites";
@@ -157,6 +164,64 @@
                 resourceTypes: ["main_frame"],
             },
         }));
+
+    // ---- Shorts / Reels pages ----------------------------------------------
+
+    // Far above the ids handed out to blocked sites (which count up from 1)
+    const SHORTS_REELS_RULE_IDS = Object.freeze({ youtubeShorts: 1_000_001, facebookReels: 1_000_002 });
+
+    // Added by the redirect rules to the home page URL so the content script
+    // there can count the redirect (and remove the marker from the address bar)
+    const REDIRECT_MARKER = "attention-redirect";
+
+    const SHORTS_REELS_PAGES = Object.freeze({
+        youtubeShorts: Object.freeze({ domain: "youtube.com", path: "shorts", kind: "shorts" }),
+        facebookReels: Object.freeze({ domain: "facebook.com", path: "reels?", kind: "reels" }),
+    });
+
+    const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    /**
+     * "youtubeShorts" / "facebookReels" when the URL is a Shorts or Reels
+     * page (whatever the toggles say), otherwise null. Only the first path
+     * segment counts: /shorts/abc and /reel/123 match, /watch?v=shorts and
+     * /@channel/shorts don't.
+     */
+    const shortsReelsToggleFor = (url) => {
+        let pathname;
+        try {
+            pathname = new URL(url).pathname;
+        } catch {
+            return null;
+        }
+        for (const [toggle, page] of Object.entries(SHORTS_REELS_PAGES)) {
+            if (domainMatches(page.domain, url) && new RegExp(`^/${page.path}(/|$)`, "i").test(pathname)) return toggle;
+        }
+        return null;
+    };
+
+    /**
+     * Redirect rules for the Shorts/Reels pages whose toggle is on. They keep
+     * the host (m.youtube.com stays on m.youtube.com), go to its home page and
+     * add the #attention-redirect=<kind> marker. A site blocked as a whole
+     * still ends on the blocked page: the home page it redirects to is blocked.
+     */
+    const buildShortsReelsRules = (hideShortsReels = DEFAULT_SETTINGS.hideShortsReels) =>
+        Object.entries(SHORTS_REELS_PAGES)
+            .filter(([toggle]) => hideShortsReels[toggle])
+            .map(([toggle, page]) => ({
+                id: SHORTS_REELS_RULE_IDS[toggle],
+                priority: 1,
+                action: {
+                    type: "redirect",
+                    redirect: { regexSubstitution: `\\1/#${REDIRECT_MARKER}=${page.kind}` },
+                },
+                condition: {
+                    regexFilter: `^(https?://([a-z0-9-]+\\.)*${escapeRegex(page.domain)})/${page.path}([/?#].*)?$`,
+                    isUrlFilterCaseSensitive: false,
+                    resourceTypes: ["main_frame"],
+                },
+            }));
 
     const atTime = (date, time) => {
         const result = new Date(date);
@@ -397,6 +462,11 @@
         activeSites,
         buildRules,
         nextTransition,
+        // Shorts / Reels pages
+        SHORTS_REELS_RULE_IDS,
+        REDIRECT_MARKER,
+        shortsReelsToggleFor,
+        buildShortsReelsRules,
         // blocked sites
         loadBlockedSites,
         addSite,

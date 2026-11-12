@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  * @vitest-environment-options { "url": "https://www.youtube.com/" }
  */
-import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { flushRemoval, flushPromises } from "./helpers.js";
 
 const richSection = () => document.createElement("ytd-rich-section-renderer");
@@ -169,6 +169,53 @@ describe("removal statistics", () => {
 
         expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(0);
     });
+});
+
+describe("Shorts pages (in-app navigation)", () => {
+    const redirect = { type: "STATS_EVENT", event: { event: "redirect", kind: "shorts" } };
+    const redirectReports = () => statsReports().filter((m) => m.event.event === "redirect");
+
+    // jsdom can't navigate, so location.replace() only logs "Not implemented";
+    // the e2e tests check where the tab actually ends up
+    let jsdomErrorSpy;
+    beforeEach(() => {
+        jsdomErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+    afterEach(() => {
+        jsdomErrorSpy.mockRestore();
+    });
+
+    it("leaves a Short opened from inside YouTube and counts the redirect", () => {
+        goTo("/shorts/abc123");
+
+        expect(redirectReports()).toEqual([redirect]);
+    });
+
+    it("counts each Short left only once, however many navigation events fire", async () => {
+        goTo("/shorts/abc123");
+        document.dispatchEvent(new Event("yt-navigate-finish"));
+        window.dispatchEvent(new PopStateEvent("popstate"));
+        document.body.append(document.createElement("div")); // DOM observer fallback
+        await flushRemoval();
+
+        expect(redirectReports()).toEqual([redirect]);
+    });
+
+    it("notices a URL change without a YouTube event (Back/Forward, DOM fallback)", async () => {
+        window.history.replaceState({}, "", "/shorts/xyz");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+
+        expect(redirectReports()).toEqual([redirect]);
+    });
+
+    it.each(["/watch?v=shorts", "/@channel/shorts", "/results?search_query=shorts", "/"])(
+        "stays on %s",
+        (path) => {
+            goTo(path);
+
+            expect(redirectReports()).toEqual([]);
+        }
+    );
 });
 
 describe("YouTube SPA navigation (yt-navigate-finish)", () => {
@@ -946,6 +993,19 @@ describe("Hide YouTube Shorts toggle", () => {
 
         expect(document.documentElement.hasAttribute("data-attention-show-shorts")).toBe(false);
         expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(0);
+    });
+
+    it("with the toggle off, Shorts pages stay; switching it on leaves the open one", async () => {
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {}); // jsdom: no navigation
+        const redirects = () => statsReports().filter((m) => m.event.event === "redirect");
+        await setToggle(false);
+
+        goTo("/shorts/abc123");
+        expect(redirects()).toEqual([]);
+
+        await setToggle(true);
+        expect(redirects()).toEqual([{ type: "STATS_EVENT", event: { event: "redirect", kind: "shorts" } }]);
+        errorSpy.mockRestore();
     });
 
     it("ignores the Facebook toggle on YouTube", async () => {

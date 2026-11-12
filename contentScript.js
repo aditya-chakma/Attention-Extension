@@ -2,6 +2,8 @@
 // after icons.js, bookmarkStore.js and settingsStore.js:
 //  - removes YouTube Shorts shelves / Facebook Reels sections (unless switched
 //    off in Settings), see hide.css for the instant pre-hide
+//  - sends in-app navigation to a Shorts/Reels page to the home page (direct
+//    loads are redirected earlier by background.js rules)
 //  - adds the timestamp and "Save to playlist" buttons to the YouTube player
 // Site blocking lives in background.js (declarativeNetRequest rules built from
 // the settings); this script only runs on pages that were allowed through.
@@ -42,6 +44,7 @@
             document.documentElement.toggleAttribute(attribute, !hideToggles[toggle]);
         }
         // Switched on while the page is open: catch what is already there
+        if (leaveShortsReelsPage()) return;
         if (removalEnabled(activeSource)) sweep();
     };
 
@@ -73,13 +76,73 @@
         return Math.max(1, ids.size);
     };
 
-    const reportRemoval = (kind, count) => {
+    const reportStat = (event) => {
         try {
-            chrome.runtime.sendMessage({ type: STATS_MESSAGE, event: { event: "removal", kind, count } })?.catch(() => {});
+            chrome.runtime.sendMessage({ type: STATS_MESSAGE, event })?.catch(() => {});
         } catch {
             // The extension was reloaded or updated: this page's script is orphaned
         }
     };
+
+    const reportRemoval = (kind, count) => reportStat({ event: "removal", kind, count });
+
+    // ---- Shorts / Reels pages ----------------------------------------------
+    // A Shorts or Reels page (youtube.com/shorts/..., facebook.com/reel/...)
+    // is left for the site's home page while its toggle is on. Loading one
+    // directly is handled by background.js rules, which redirect to the home
+    // page with a #attention-redirect=<kind> marker counted here. Both sites
+    // are SPAs, though: opening a Short from inside YouTube only changes the
+    // URL with history.pushState, which no network rule sees, so URL changes
+    // are watched here too.
+    const KIND_FOR_TOGGLE = { youtubeShorts: "shorts", facebookReels: "reels" };
+    const MARKER_PATTERN = new RegExp(`^#${SETTINGS.REDIRECT_MARKER}=(shorts|reels)$`);
+
+    // The page being left; location.replace() takes a moment, and several
+    // triggers (URL change, yt-navigate-finish...) can fire meanwhile
+    let leavingHref = null;
+
+    /** Leaves a Shorts/Reels page whose toggle is on; true when it does. */
+    function leaveShortsReelsPage() {
+        const href = window.location.href;
+        const toggle = SETTINGS.shortsReelsToggleFor(href);
+        if (!toggle) {
+            leavingHref = null;
+            return false;
+        }
+        // Until the settings are read the toggle is unknown; applyHideToggles
+        // calls this again once it is
+        if (!togglesKnown || !hideToggles[toggle]) return false;
+        if (leavingHref === href) return true;
+
+        leavingHref = href;
+        reportStat({ event: "redirect", kind: KIND_FOR_TOGGLE[toggle] });
+        // replace(): Back shouldn't return to the Short only to bounce again
+        window.location.replace(window.location.origin + "/");
+        return true;
+    }
+
+    // Arrived through a background.js redirect: count it once and tidy the
+    // address bar (a reload then no longer carries the marker)
+    const consumeRedirectMarker = () => {
+        const match = window.location.hash.match(MARKER_PATTERN);
+        if (!match) return;
+        history.replaceState(history.state, "", window.location.pathname + window.location.search);
+        reportStat({ event: "redirect", kind: match[1] });
+    };
+
+    let lastHref = window.location.href;
+    const onUrlMaybeChanged = () => {
+        if (window.location.href === lastHref) return;
+        lastHref = window.location.href;
+        leaveShortsReelsPage();
+    };
+
+    consumeRedirectMarker();
+    // The Navigation API reports every same-document URL change, including
+    // pushState from the page's own scripts; popstate covers Back/Forward and
+    // the DOM observer below is the fallback where neither fires
+    window.navigation?.addEventListener("currententrychange", onUrlMaybeChanged);
+    window.addEventListener("popstate", onUrlMaybeChanged);
 
     let activeSource = null;
     let sweepScheduled = false;
@@ -119,7 +182,10 @@
         sweep();
 
         if (!domObserver) {
-            domObserver = new MutationObserver(scheduleSweep);
+            domObserver = new MutationObserver(() => {
+                onUrlMaybeChanged();
+                scheduleSweep();
+            });
             domObserver.observe(document.documentElement, { childList: true, subtree: true });
         }
     }
@@ -604,6 +670,7 @@
     // YouTube is an SPA: react to its own navigation event instead of waiting for
     // a background message (which can race with content script injection on load)
     const onYouTubeNavigation = () => {
+        if (leaveShortsReelsPage()) return;
         const source = window.location.href.includes("watch") ? "yt-watch" : "yt-home";
         startRemoval(source);
 

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  * @vitest-environment-options { "url": "https://www.facebook.com/" }
  */
-import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { flushRemoval, flushPromises } from "./helpers.js";
 
 let onMessage;
@@ -104,6 +104,68 @@ describe("Reels removal statistics", () => {
         expect(statsReports()).toEqual([
             { type: "STATS_EVENT", event: { event: "removal", kind: "reels", count: 4 } },
         ]);
+    });
+});
+
+describe("Reels pages (in-app navigation)", () => {
+    const redirects = () =>
+        chrome.runtime.sendMessage.mock.calls
+            .map(([message]) => message)
+            .filter((m) => m.type === "STATS_EVENT" && m.event.event === "redirect");
+    const reelsRedirect = { type: "STATS_EVENT", event: { event: "redirect", kind: "reels" } };
+
+    // Facebook has no navigation event: a pushState is noticed through the
+    // Navigation API in Chrome, and here (jsdom has none) through popstate
+    // or the DOM changes the new page brings
+    const navigate = async (path, how = "dom") => {
+        window.history.replaceState({}, "", path);
+        if (how === "popstate") window.dispatchEvent(new PopStateEvent("popstate"));
+        else document.body.append(document.createElement("div"));
+        await flushRemoval();
+    };
+
+    let jsdomErrorSpy; // jsdom can't navigate: location.replace() only logs
+    beforeEach(() => {
+        jsdomErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+    afterEach(async () => {
+        await navigate("/");
+        jsdomErrorSpy.mockRestore();
+    });
+
+    it.each(["/reel/123456789/", "/reels/"])("leaves %s and counts the redirect once", async (path) => {
+        await navigate(path);
+        await navigate(path, "popstate"); // still the same page
+
+        expect(redirects()).toEqual([reelsRedirect]);
+    });
+
+    it("notices Back/Forward to a reel", async () => {
+        await navigate("/reel/42", "popstate");
+
+        expect(redirects()).toEqual([reelsRedirect]);
+    });
+
+    it.each(["/", "/someone/videos/reel/1", "/reelz", "/watch/"])("stays on %s", async (path) => {
+        await navigate(path);
+
+        expect(redirects()).toEqual([]);
+    });
+
+    it("stays on reels while 'Hide Facebook Reels' is off", async () => {
+        chrome.storage.sync.set({
+            attention_settings: JSON.stringify({ hideShortsReels: { youtubeShorts: true, facebookReels: false } }),
+        });
+        await flushPromises();
+
+        await navigate("/reel/7");
+        expect(redirects()).toEqual([]);
+
+        chrome.storage.sync.set({
+            attention_settings: JSON.stringify({ hideShortsReels: { youtubeShorts: true, facebookReels: true } }),
+        });
+        await flushPromises();
+        expect(redirects()).toEqual([reelsRedirect]);
     });
 });
 
