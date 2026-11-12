@@ -2,9 +2,11 @@
 // settingsStore.js and statsStore.js with the extension pages and content scripts
 import "./settingsStore.js";
 import "./statsStore.js";
+import { createScreenTimeTracker, SCREEN_TIME_ALARM } from "./screenTime.js";
 
 const SETTINGS = globalThis.ATTENTION_SETTINGS;
 const STATS = globalThis.ATTENTION_STATS;
+const screenTime = createScreenTimeTracker({ settings: SETTINGS, stats: STATS });
 
 // ---- Storage migration -----------------------------------------------------
 // Bookmarks (video entries, playlists, titles and the per-video timestamp
@@ -142,13 +144,18 @@ function syncRules() {
 chrome.runtime.onInstalled.addListener(async () => {
     await migrateBookmarksToLocal().catch((error) => console.error("Attention: bookmark migration failed", error));
     await syncRules();
+    await screenTime.checkpoint();
 });
 
 // Alarms don't survive the browser closing while they are due, so catch up on start
-chrome.runtime.onStartup.addListener(() => syncRules());
+chrome.runtime.onStartup.addListener(() => {
+    syncRules();
+    screenTime.checkpoint();
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === TRANSITION_ALARM) syncRules();
+    else if (alarm.name === SCREEN_TIME_ALARM) screenTime.checkpoint();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -157,6 +164,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const syncedChanged = area === "sync" && (SETTINGS.SITES_KEY in changes || SETTINGS.SETTINGS_KEY in changes);
     const unblocksChanged = area === "local" && SETTINGS.TEMP_UNBLOCKS_KEY in changes;
     if (syncedChanged || unblocksChanged) syncRules();
+    // A site added to the list may be the one on screen
+    if (area === "sync" && SETTINGS.SITES_KEY in changes) screenTime.checkpoint();
 });
 
 // ---- Statistics ------------------------------------------------------------
@@ -256,3 +265,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         chrome.tabs.sendMessage(tabId, properties).catch(() => {});
     }
 });
+
+// ---- Screen time (screenTime.js) -----------------------------------------
+
+screenTime.register();

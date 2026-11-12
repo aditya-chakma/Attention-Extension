@@ -594,13 +594,68 @@ describe("background.js STATS_EVENT message", () => {
     });
 });
 
+describe("background.js screen time routing", () => {
+    const NOW = new Date(2026, 10, 12, 15, 0);
+    const SESSION_KEY = "attention_screen_time_session";
+    const session = () => JSON.parse(chrome.__sessionData[SESSION_KEY] ?? "null");
+
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(NOW);
+        chrome.__setWindow({ id: 1, focused: true, tabs: [{ id: 3, url: "https://www.youtube.com/", active: true }] });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("checks screen time when the browser starts", async () => {
+        onStartup();
+        await settle();
+
+        expect(session()).toEqual({ domain: "youtube.com", start: NOW.getTime() });
+    });
+
+    it("credits time on the heartbeat alarm, leaving the blocking rules alone", async () => {
+        onStartup();
+        await settle();
+        chrome.declarativeNetRequest.getDynamicRules.mockClear();
+
+        vi.setSystemTime(NOW.getTime() + 60_000);
+        onAlarm({ name: "attention-screen-time" });
+        await settle();
+
+        expect(JSON.parse(chrome.__storageData["attention_stats_day_2026-11-12"]).screenTimeMs).toEqual({
+            "youtube.com": 60_000,
+        });
+        expect(chrome.declarativeNetRequest.getDynamicRules).not.toHaveBeenCalled();
+    });
+
+    it("checks again when the block list changes (the site on screen may just have been added)", async () => {
+        chrome.__setWindow({ id: 1, focused: true, tabs: [{ id: 3, url: "https://reddit.com/", active: true }] });
+        storeSites(site({ domain: "reddit.com" }));
+
+        onStorageChanged({ [SITES_KEY]: { newValue: chrome.__syncData[SITES_KEY] } }, "sync");
+        await settle();
+
+        expect(session()).toEqual({ domain: "reddit.com", start: NOW.getTime() });
+    });
+
+    it("listens to tab, window and idle changes", () => {
+        expect(chrome.__tabActivatedListeners).toHaveLength(1);
+        expect(chrome.__tabRemovedListeners).toHaveLength(1);
+        expect(chrome.__focusChangedListeners).toHaveLength(1);
+        expect(chrome.__idleStateListeners).toHaveLength(1);
+    });
+});
+
 describe("background.js tab listener", () => {
     beforeEach(() => {
         chrome.tabs.sendMessage.mockImplementation(() => Promise.resolve());
     });
 
-    it("registers exactly one onUpdated listener", () => {
-        expect(chrome.__tabUpdatedListeners).toHaveLength(1);
+    it("registers two onUpdated listeners: content script notifications, then screen time", () => {
+        expect(chrome.__tabUpdatedListeners).toHaveLength(2);
         expect(typeof onTabUpdated).toBe("function");
     });
 

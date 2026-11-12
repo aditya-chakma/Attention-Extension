@@ -13,6 +13,10 @@ describe("manifest.json", () => {
         expect(manifest.permissions).toEqual(expect.arrayContaining(["storage", "tabs", "alarms", "declarativeNetRequest"]));
     });
 
+    it("can tell when the user is away, for screen time", () => {
+        expect(manifest.permissions).toContain("idle");
+    });
+
     it("can redirect any site the user blocks", () => {
         // Redirect rules need host access to the sites they redirect
         expect(manifest.host_permissions).toContain("<all_urls>");

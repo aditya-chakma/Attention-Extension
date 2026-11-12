@@ -7,9 +7,15 @@ import { vi } from "vitest";
  * __alarmListeners so tests can invoke them directly. Dynamic
  * declarativeNetRequest rules are kept in __dynamicRules.
  *
- * Both storage areas are modeled. Bookmarks live in `local` (exposed as
+ * The storage areas are modeled. Bookmarks live in `local` (exposed as
  * __storageData, which most tests seed and inspect); settings live in `sync`
- * (exposed as __syncData). Like Chrome, get/set/remove accept a callback or,
+ * (exposed as __syncData); the screen time interval lives in `session`
+ * (__sessionData).
+ *
+ * For screen time, the last focused window (with its tabs) and the idle state
+ * are settable: __setWindow({ id, focused, tabs }) / __setIdleState("idle").
+ * Listeners for tabs.onActivated / onRemoved, windows.onFocusChanged and
+ * idle.onStateChanged are kept in __tabActivatedListeners etc. Like Chrome, get/set/remove accept a callback or,
  * without one, return a Promise.
  */
 export function createChromeMock() {
@@ -19,7 +25,13 @@ export function createChromeMock() {
     const startupListeners = [];
     const alarmListeners = [];
     const storageChangedListeners = [];
+    const tabActivatedListeners = [];
+    const tabRemovedListeners = [];
+    const focusChangedListeners = [];
+    const idleStateListeners = [];
     let dynamicRules = [];
+    let lastFocusedWindow = null; // getLastFocused rejects like Chrome with no window
+    let idleState = "active";
 
     const createArea = (areaName, data) => ({
         get: vi.fn((keys, callback) => {
@@ -64,6 +76,7 @@ export function createChromeMock() {
 
     const localData = {};
     const syncData = {};
+    const sessionData = {};
 
     const chrome = {
         runtime: {
@@ -102,6 +115,7 @@ export function createChromeMock() {
         storage: {
             local: createArea("local", localData),
             sync: createArea("sync", syncData),
+            session: createArea("session", sessionData),
             onChanged: {
                 addListener: vi.fn((fn) => storageChangedListeners.push(fn)),
             },
@@ -110,14 +124,49 @@ export function createChromeMock() {
             onUpdated: {
                 addListener: vi.fn((fn) => tabUpdatedListeners.push(fn)),
             },
+            onActivated: {
+                addListener: vi.fn((fn) => tabActivatedListeners.push(fn)),
+            },
+            onRemoved: {
+                addListener: vi.fn((fn) => tabRemovedListeners.push(fn)),
+            },
             sendMessage: vi.fn(() => Promise.resolve()),
             query: vi.fn(() => Promise.resolve([])),
             create: vi.fn(() => Promise.resolve({})),
             update: vi.fn(() => Promise.resolve({})),
         },
+        windows: {
+            WINDOW_ID_NONE: -1,
+            getLastFocused: vi.fn(() =>
+                lastFocusedWindow
+                    ? Promise.resolve(structuredClone(lastFocusedWindow))
+                    : Promise.reject(new Error("No last-focused window"))
+            ),
+            onFocusChanged: {
+                addListener: vi.fn((fn) => focusChangedListeners.push(fn)),
+            },
+        },
+        idle: {
+            queryState: vi.fn(() => Promise.resolve(idleState)),
+            setDetectionInterval: vi.fn(),
+            onStateChanged: {
+                addListener: vi.fn((fn) => idleStateListeners.push(fn)),
+            },
+        },
 
         __storageData: localData,
         __syncData: syncData,
+        __sessionData: sessionData,
+        __tabActivatedListeners: tabActivatedListeners,
+        __tabRemovedListeners: tabRemovedListeners,
+        __focusChangedListeners: focusChangedListeners,
+        __idleStateListeners: idleStateListeners,
+        __setWindow(win) {
+            lastFocusedWindow = win;
+        },
+        __setIdleState(state) {
+            idleState = state;
+        },
         __messageListeners: messageListeners,
         __tabUpdatedListeners: tabUpdatedListeners,
         __installedListeners: installedListeners,
@@ -132,12 +181,18 @@ export function createChromeMock() {
         __reset() {
             for (const key of Object.keys(localData)) delete localData[key];
             for (const key of Object.keys(syncData)) delete syncData[key];
+            for (const key of Object.keys(sessionData)) delete sessionData[key];
             dynamicRules = [];
+            lastFocusedWindow = null;
+            idleState = "active";
             for (const fn of [
                 chrome.runtime.getURL,
                 chrome.runtime.sendMessage,
                 ...Object.values(chrome.storage.local),
                 ...Object.values(chrome.storage.sync),
+                ...Object.values(chrome.storage.session),
+                chrome.windows.getLastFocused,
+                chrome.idle.queryState,
                 ...Object.values(chrome.declarativeNetRequest),
                 chrome.alarms.create,
                 chrome.alarms.clear,

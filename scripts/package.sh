@@ -17,6 +17,7 @@ FILES=(
     bookmarkStore.js
     settingsStore.js
     statsStore.js
+    screenTime.js
     contentScript.js
     hide.css
     player-buttons.css
