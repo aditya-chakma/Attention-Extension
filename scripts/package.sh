@@ -16,6 +16,7 @@ FILES=(
     icons.js
     bookmarkStore.js
     settingsStore.js
+    statsStore.js
     contentScript.js
     hide.css
     player-buttons.css

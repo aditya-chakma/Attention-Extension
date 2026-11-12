@@ -1,8 +1,10 @@
 // The background worker is an ES module (see manifest.json) so it can share
-// settingsStore.js with the extension pages and content scripts
+// settingsStore.js and statsStore.js with the extension pages and content scripts
 import "./settingsStore.js";
+import "./statsStore.js";
 
 const SETTINGS = globalThis.ATTENTION_SETTINGS;
+const STATS = globalThis.ATTENTION_STATS;
 
 // ---- Storage migration -----------------------------------------------------
 // Bookmarks (video entries, playlists, titles and the per-video timestamp
@@ -147,21 +149,45 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (sitesChanged || unblocksChanged) syncRules();
 });
 
+// ---- Messages from pages and content scripts ------------------------------
+
 // The blocked page asks for a temporary unblock. The PIN is checked here so the
 // page itself never decides whether to lift a block.
+async function handleTempUnblock(message) {
+    const { pinHash } = await SETTINGS.loadSettings();
+    if (!pinHash) return { ok: false, error: "Set a PIN in Settings to unblock sites temporarily" };
+    if (!(await SETTINGS.verifyPin(message.pin))) return { ok: false, error: "Wrong PIN" };
+
+    const expiresAt = await SETTINGS.grantTempUnblock(message.domain, Number(message.minutes));
+    // Rules are updated before replying so the page can navigate right away
+    await syncRules();
+    return { ok: true, expiresAt };
+}
+
+// Content scripts and the blocked page report what they did (Shorts removed,
+// a blocked visit...). The worker is the only writer of statistics, so
+// reports from several tabs are applied one at a time. Only the events in
+// STATS.MESSAGE_EVENTS are accepted this way; unblocks and screen time are
+// recorded by the worker itself.
+async function handleStatsEvent(message) {
+    const event = message.event;
+    if (!event || !STATS.MESSAGE_EVENTS.includes(event.event)) {
+        return { ok: false, error: "This statistic can't be reported from a page" };
+    }
+    await STATS.record(event);
+    return { ok: true };
+}
+
+const MESSAGE_HANDLERS = {
+    TEMP_UNBLOCK: handleTempUnblock,
+    [STATS.STATS_MESSAGE]: handleStatsEvent,
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (!message || message.type !== "TEMP_UNBLOCK") return false;
+    const handler = message && Object.hasOwn(MESSAGE_HANDLERS, message.type) ? MESSAGE_HANDLERS[message.type] : null;
+    if (!handler) return false;
 
-    (async () => {
-        const { pinHash } = await SETTINGS.loadSettings();
-        if (!pinHash) return { ok: false, error: "Set a PIN in Settings to unblock sites temporarily" };
-        if (!(await SETTINGS.verifyPin(message.pin))) return { ok: false, error: "Wrong PIN" };
-
-        const expiresAt = await SETTINGS.grantTempUnblock(message.domain, Number(message.minutes));
-        // Rules are updated before replying so the page can navigate right away
-        await syncRules();
-        return { ok: true, expiresAt };
-    })()
+    handler(message)
         .then(sendResponse)
         .catch((error) => sendResponse({ ok: false, error: error.message }));
 

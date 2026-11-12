@@ -418,6 +418,76 @@ describe("background.js TEMP_UNBLOCK message", () => {
     });
 });
 
+describe("background.js STATS_EVENT message", () => {
+    const NOW = new Date(2026, 10, 12, 15, 0);
+    const TODAY_KEY = "attention_stats_day_2026-11-12";
+
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(NOW);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    const send = async (message) => {
+        const sendResponse = vi.fn();
+        const isAsync = onMessage(message, {}, sendResponse);
+        await settle();
+        return { isAsync, response: sendResponse.mock.calls[0]?.[0] };
+    };
+
+    const today = () => JSON.parse(chrome.__storageData[TODAY_KEY]);
+
+    it("records events reported by content scripts and the blocked page", async () => {
+        const removal = await send({ type: "STATS_EVENT", event: { event: "removal", kind: "shorts", count: 3 } });
+        await send({ type: "STATS_EVENT", event: { event: "redirect", kind: "reels" } });
+        await send({ type: "STATS_EVENT", event: { event: "blockedVisit", domain: "reddit.com" } });
+
+        expect(removal).toEqual({ isAsync: true, response: { ok: true } });
+        expect(today()).toMatchObject({ shortsRemoved: 3, reelsRedirects: 1, blockedVisits: { "reddit.com": 1 } });
+    });
+
+    it("applies reports from several tabs at once without losing any", async () => {
+        const sendResponse = vi.fn();
+        for (let i = 0; i < 10; i++) {
+            onMessage({ type: "STATS_EVENT", event: { event: "removal", kind: "reels", count: 1 } }, {}, sendResponse);
+        }
+        await settle();
+        await settle();
+
+        expect(sendResponse).toHaveBeenCalledTimes(10);
+        expect(today().reelsRemoved).toBe(10);
+    });
+
+    it.each([
+        { event: "unblock", domain: "reddit.com", minutes: 60 },
+        { event: "screenTime", domain: "youtube.com", ms: 1000 },
+    ])("refuses %j, which only the worker itself may record", async (event) => {
+        const { response } = await send({ type: "STATS_EVENT", event });
+
+        expect(response).toEqual({ ok: false, error: "This statistic can't be reported from a page" });
+        expect(chrome.__storageData[TODAY_KEY]).toBeUndefined();
+    });
+
+    it("reports malformed events without recording them", async () => {
+        const { response } = await send({ type: "STATS_EVENT", event: { event: "removal", kind: "shorts", count: -1 } });
+        const missing = await send({ type: "STATS_EVENT" });
+
+        expect(response.ok).toBe(false);
+        expect(response.error).toMatch(/Invalid stats event/);
+        expect(missing.response.ok).toBe(false);
+        expect(chrome.__storageData[TODAY_KEY]).toBeUndefined();
+    });
+
+    it("ignores message types that only exist on Object.prototype", () => {
+        const sendResponse = vi.fn();
+        expect(onMessage({ type: "toString" }, {}, sendResponse)).toBe(false);
+        expect(onMessage({ type: "constructor" }, {}, sendResponse)).toBe(false);
+    });
+});
+
 describe("background.js tab listener", () => {
     beforeEach(() => {
         chrome.tabs.sendMessage.mockImplementation(() => Promise.resolve());
