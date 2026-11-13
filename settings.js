@@ -1,6 +1,7 @@
-// Settings page: blocked sites with schedules, the Shorts/Reels toggles and
-// the unblock PIN. All data lives in settingsStore.js; this module only
-// renders it and forwards changes. The static page shell is settings.html.
+// Settings page: blocked sites with schedules, the Shorts/Reels toggles, the
+// unblock PIN and clearing the usage statistics. The data lives in
+// settingsStore.js and statsStore.js; this module only renders it and forwards
+// changes. The static page shell is settings.html.
 
 // Publish globalThis.ATTENTION_ICONS, ATTENTION_SETTINGS and ATTENTION_STATS
 import "./icons.js";

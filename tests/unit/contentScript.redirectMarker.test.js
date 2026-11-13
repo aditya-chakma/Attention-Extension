@@ -2,14 +2,13 @@
  * @vitest-environment jsdom
  * @vitest-environment-options { "url": "https://www.youtube.com/?app=desktop#attention-redirect=shorts" }
  */
-import { it, expect, beforeAll, vi } from "vitest";
+import { it, expect, beforeAll } from "vitest";
 import { flushPromises } from "./helpers.js";
 
 // The page a background.js redirect rule sent a Shorts URL to
 let atLoad;
 
 beforeAll(async () => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
     await import("../../icons.js");
     await import("../../bookmarkStore.js");
     await import("../../settingsStore.js");

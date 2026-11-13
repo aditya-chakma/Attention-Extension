@@ -2,9 +2,9 @@
  * Usage statistics for the Insights page: Shorts/Reels removed and
  * redirected, blocked-site visits, temporary unblocks and screen time.
  *
- * Loaded like settingsStore.js: via `import "./statsStore.js"` from the
- * background service worker (the only writer) and from extension pages that
- * read the numbers. Publishes globalThis.ATTENTION_STATS.
+ * Imported (`import "./statsStore.js"`) by the background service worker and
+ * by the extension pages that read the numbers. Publishes
+ * globalThis.ATTENTION_STATS.
  *
  * Only background.js writes. Content scripts and the blocked page report
  * events with chrome.runtime.sendMessage({ type: STATS_MESSAGE, event }); the
@@ -324,7 +324,7 @@
         };
     };
 
-    // Writes run one at a time within a context (the worker is the only writer)
+    // Writes run one at a time
     let queue = Promise.resolve();
     const enqueue = (run) => {
         const result = queue.then(run);
@@ -354,8 +354,7 @@
 
             const items = { [key]: JSON.stringify(updated) };
             const meta = parse(data[META_KEY], {});
-            // trackingSince is the earliest day ever written (tests and tools
-            // may record into past days; live events always land on today)
+            // The earliest day ever written: a record for a past day moves it back
             if (!meta.trackingSince || day < meta.trackingSince) {
                 items[META_KEY] = JSON.stringify({ ...meta, trackingSince: day });
             }

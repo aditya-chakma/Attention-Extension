@@ -16,6 +16,7 @@ const goTo = (path) => {
 // STATS_EVENT messages the content script sent to the background worker
 const statsReports = () =>
     chrome.runtime.sendMessage.mock.calls.map(([message]) => message).filter((m) => m.type === "STATS_EVENT");
+const removalCounts = () => statsReports().filter((m) => m.event.event === "removal").map((m) => m.event.count);
 
 // A shelf holding the given Shorts, linked twice each like YouTube's
 // thumbnail + title
@@ -34,12 +35,9 @@ const shelfWithShorts = (createShelf, ...ids) => {
 };
 
 let onMessage;
-let logSpy;
 let atLoad; // snapshot taken right after the script ran, before any per-test mock reset
 
 beforeAll(async () => {
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
     // Elements present before the script runs must be removed on load
     document.body.append(richSection(), richSection(), reelShelf());
 
@@ -54,7 +52,6 @@ beforeAll(async () => {
     atLoad = {
         richSections: document.querySelectorAll("ytd-rich-section-renderer").length,
         reelShelves: document.querySelectorAll("ytd-reel-shelf-renderer").length,
-        logs: logSpy.mock.calls.map(([message]) => message),
         getURLCalls: chrome.runtime.getURL.mock.calls.map(([path]) => path),
         statsReports: statsReports(),
     };
@@ -62,7 +59,6 @@ beforeAll(async () => {
 
 afterEach(() => {
     document.body.innerHTML = "";
-    logSpy.mockClear();
     goTo("/"); // back to home mode for the next test
 });
 
@@ -70,7 +66,6 @@ describe("YouTube home page", () => {
     it("removes rich sections present at load but leaves reel shelves alone", () => {
         expect(atLoad.richSections).toBe(0);
         expect(atLoad.reelShelves).toBe(1);
-        expect(atLoad.logs).toContain("Attention extension has removed 2 shorts from yt-home");
     });
 
     it("does not redirect YouTube to the blocked page", () => {
@@ -94,7 +89,7 @@ describe("YouTube home page", () => {
         await flushRemoval();
 
         expect(wrapper.children).toHaveLength(0);
-        expect(logSpy).toHaveBeenCalledWith("Attention extension has removed 3 shorts from yt-home");
+        expect(removalCounts()).toEqual([3]);
     });
 
     it("coalesces a burst of mutations into a single sweep", async () => {
@@ -102,17 +97,8 @@ describe("YouTube home page", () => {
 
         await flushRemoval();
 
-        const removalLogs = logSpy.mock.calls.filter(([m]) => String(m).startsWith("Attention extension has removed"));
-        expect(removalLogs).toHaveLength(1);
-        expect(removalLogs[0][0]).toBe("Attention extension has removed 10 shorts from yt-home");
-    });
-
-    it("does nothing (and logs nothing) when unrelated nodes are added", async () => {
-        document.body.append(document.createElement("div"));
-
-        await flushRemoval();
-
-        expect(logSpy).not.toHaveBeenCalled();
+        // One sweep, so one report covering all ten
+        expect(removalCounts()).toEqual([10]);
     });
 });
 
@@ -227,7 +213,7 @@ describe("YouTube SPA navigation (yt-navigate-finish)", () => {
         // The switch sweeps synchronously
         expect(document.querySelectorAll("ytd-reel-shelf-renderer")).toHaveLength(0);
         expect(document.querySelectorAll("ytd-rich-section-renderer")).toHaveLength(1);
-        expect(logSpy).toHaveBeenCalledWith("Attention extension has removed 1 shorts from yt-watch");
+        expect(removalCounts()).toEqual([1]);
     });
 
     it("keeps removing reel shelves added later on the watch page", async () => {

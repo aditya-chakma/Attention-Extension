@@ -1,5 +1,5 @@
-// The background worker is an ES module (see manifest.json) so it can share
-// settingsStore.js and statsStore.js with the extension pages and content scripts
+// The background worker is an ES module (see manifest.json) so it can import
+// the stores the extension pages and content scripts use too
 import "./settingsStore.js";
 import "./statsStore.js";
 import { createScreenTimeTracker, SCREEN_TIME_ALARM } from "./screenTime.js";
@@ -66,9 +66,7 @@ const blockedPageUrl = (domain) =>
 
 const sameRule = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-// Besides the blocked sites, the rules send youtube.com/shorts and
-// facebook.com/reel(s) pages to the site's home page while the matching
-// Shorts/Reels toggle is on (see buildShortsReelsRules in settingsStore.js)
+// The blocked sites' rules plus the Shorts/Reels page redirects
 async function applyRules(active, hideShortsReels) {
     const desired = [...SETTINGS.buildRules(active), ...SETTINGS.buildShortsReelsRules(hideShortsReels)];
     const existing = await chrome.declarativeNetRequest.getDynamicRules();
@@ -195,11 +193,7 @@ async function handleTempUnblock(message) {
     return { ok: true, expiresAt };
 }
 
-// Content scripts and the blocked page report what they did (Shorts removed,
-// a blocked visit...). The worker is the only writer of statistics, so
-// reports from several tabs are applied one at a time. Only the events in
-// STATS.MESSAGE_EVENTS are accepted this way; unblocks and screen time are
-// recorded by the worker itself.
+// Statistics reported by content scripts and the blocked page (see statsStore.js)
 async function handleStatsEvent(message) {
     const event = message.event;
     if (!event || !STATS.MESSAGE_EVENTS.includes(event.event)) {

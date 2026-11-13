@@ -2,7 +2,7 @@
 
 This Chrome extension is your productivity companion, designed to help you stay focused. With **Attention**, you can:
 
-- **Declutter Social Media**: remove YouTube Shorts from the home and watch pages and Facebook Reels from the feed, and send you back to the home page when you open a Short or a Reel, each with its own on/off switch.
+- **Declutter Social Media**: remove YouTube Shorts from the home and watch pages and Facebook Reels from the feed, and land on the home page instead of a Short or a Reel, each with its own on/off switch.
 - **Block Distracting Websites**: block any site you choose, all day or on a schedule (e.g. 1 PM to 6 PM on Fridays and Saturdays). Blocked pages never load.
 - **Give Yourself a Speed Bump**: set a PIN and a blocked page will offer to lift the block for 5 to 60 minutes. Forgot it? Reset it in Settings; it is a commitment device, not a lock.
 - **See Where Your Attention Goes**: an Insights page shows how many Shorts, Reels and blocked visits were stopped, your temporary unblocks, your screen time on distracting sites and your focus streak, as cards and charts over 7, 30 or 90 days.
@@ -20,7 +20,10 @@ This Chrome extension is your productivity companion, designed to help you stay 
 ### Hide Shorts and Reels
 
 - YouTube Shorts shelves (home and watch pages) and Facebook Reels sections are hidden the instant they appear (`hide.css`) and then removed from the page by the content script.
-- Opening a Short (`youtube.com/shorts/...`) or a Reel (`facebook.com/reel/...`, the `facebook.com/reels` tab) sends you to the site's home page instead. Typed or shared links are redirected by `declarativeNetRequest` rules before the page loads. Opening one from inside the site (a click that only changes the URL, as both sites are single-page apps) is caught by the content script, which watches URL changes through the Navigation API. Only paths that *start* with `/shorts`, `/reel` or `/reels` are redirected: a channel's Shorts tab, watch pages and search results open normally, and a site blocked as a whole still ends on the blocked page.
+- Opening a Short (`youtube.com/shorts/...`) or a Reel (`facebook.com/reel/...`, the `facebook.com/reels` tab) sends you to the site's home page instead:
+  - typed or shared links are redirected by `declarativeNetRequest` rules before the page loads;
+  - a Short or Reel opened from inside the site, which only changes the URL (both are single-page apps), is caught by the content script through the Navigation API.
+- Only paths that *start* with `/shorts`, `/reel` or `/reels` are redirected: a channel's Shorts tab, watch pages and search results open normally. A site blocked as a whole still ends on the blocked page.
 - Each switch (Shorts, Reels) covers both the sections and the pages, and can be turned off on the Settings page. The switch applies to open tabs without a reload, including a tab already showing a Short.
 
 ### Block websites
@@ -71,12 +74,12 @@ This Chrome extension is your productivity companion, designed to help you stay 
 
 | Permission | Why |
 |---|---|
-| `storage` | Settings (sync) and bookmarks (local) |
+| `storage` | Settings (sync); bookmarks, temporary unblocks and statistics (local); the screen time interval being measured (session) |
 | `tabs` | Notify the content script of YouTube navigations; redirect tabs already open on a newly blocked site; see which tracked site is on screen and whether it plays sound (screen time) |
 | `alarms` | Wake the service worker at schedule boundaries, unblock expiries and once a minute while measuring screen time |
 | `declarativeNetRequest` | Redirect blocked sites, and Shorts/Reels pages, before they load |
 | `idle` | Stop counting screen time while you are away or the screen is locked |
-| `<all_urls>` (host) | Required for redirect rules to apply to whichever sites the user blocks. Content scripts still run only on youtube.com and facebook.com |
+| `<all_urls>` (host) | Required for redirect rules to apply to whichever sites the user blocks, and to the Shorts/Reels pages. Content scripts still run only on youtube.com and facebook.com |
 
 ## Project layout
 
@@ -109,9 +112,11 @@ To run it locally open `chrome://extensions`, enable *Developer mode*, click *Lo
 
 ### Storage
 
-- `chrome.storage.local` holds all bookmark data: bookmarked videos, playlists, video titles and one key per YouTube video id with its timestamp bookmarks. It is per device; video details are too large for the sync quota.
-- `chrome.storage.sync` holds the extension settings (`settingsStore.js`): blocked sites with their schedules, the Shorts/Reels toggles and the unblock PIN hash. Temporary unblocks stay in `chrome.storage.local` so unblocking one device does not unblock the others.
-- `chrome.storage.local` also holds the usage statistics (`statsStore.js`): one `attention_stats_day_<YYYY-MM-DD>` key per local day and `attention_stats_meta` (the first day tracked). Days older than 180 days are deleted. Only the background worker writes them; content scripts and pages report events with a `STATS_EVENT` message, so several tabs counting at once can't overwrite each other. Unblocks and screen time can only be recorded by the worker itself.
+- `chrome.storage.sync` holds the extension settings (`settingsStore.js`): blocked sites with their schedules, the Shorts/Reels toggles and the unblock PIN hash.
+- `chrome.storage.local` is per device and holds:
+  - bookmark data (`bookmarkStore.js`): bookmarked videos, playlists, video titles and one key per YouTube video id with its timestamp bookmarks (video details are too large for the sync quota);
+  - temporary unblocks, so unblocking one device does not unblock the others;
+  - usage statistics (`statsStore.js`): one `attention_stats_day_<YYYY-MM-DD>` key per local day and `attention_stats_meta` (the first day tracked), kept 180 days. Only the background worker writes them; content scripts and pages report events with a `STATS_EVENT` message.
 - `chrome.storage.session` holds the screen time interval being measured (`attention_screen_time_session`); it is cleared when the browser closes.
 - Every reserved key starts with `attention_`; any other key is a video id. Versions before 1.2.0 kept bookmarks in sync storage, and `background.js` moves them to local storage once on install/update.
 

@@ -6,12 +6,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vite
 import { flushRemoval, flushPromises } from "./helpers.js";
 
 let onMessage;
-let logSpy;
 let getURLCallsAtLoad; // snapshot taken right after the script ran, before any per-test mock reset
 
 beforeAll(async () => {
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
     await import("../../settingsStore.js");
     await import("../../contentScript.js");
     // Removal starts once the toggles have been read from storage
@@ -22,7 +19,6 @@ beforeAll(async () => {
 
 afterEach(() => {
     document.body.innerHTML = "";
-    logSpy.mockClear();
 });
 
 describe("Facebook", () => {
@@ -51,7 +47,10 @@ describe("Facebook", () => {
 
         expect(isAsync).toBe(false);
         expect(document.querySelectorAll('[aria-label="Reels"]')).toHaveLength(0);
-        expect(logSpy).toHaveBeenCalledWith("Attention extension has removed 1 reels");
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+            type: "STATS_EVENT",
+            event: { event: "removal", kind: "reels", count: 1 },
+        });
     });
 
     it("removes Reels sections inserted later", async () => {
@@ -193,7 +192,7 @@ describe("Hide Facebook Reels toggle", () => {
         document.body.append(reel());
         await flushRemoval();
         expect(document.querySelectorAll('[aria-label="Reels"]')).toHaveLength(1);
-        expect(logSpy).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
     it("turning it back on sweeps the Reels already on the page", async () => {

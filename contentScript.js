@@ -161,12 +161,6 @@
                 el.remove();
             });
             reportRemoval(kind, items);
-
-            if (activeSource === "fb") {
-                console.log("Attention extension has removed " + nodes.length + " reels");
-            } else {
-                console.log("Attention extension has removed " + nodes.length + " shorts from " + activeSource);
-            }
         }
     }
 
@@ -270,9 +264,9 @@
         });
     };
 
-    // Storage keys reserved by the dashboard; plain video ids keep holding
-    // their timestamp bookmark lists as before. Videos and playlists are
-    // managed through bookmarkStore.js (globalThis.ATTENTION_STORE).
+    // Storage keys reserved by the dashboard; plain video ids hold their
+    // timestamp bookmark lists. Videos and playlists are managed through
+    // bookmarkStore.js (globalThis.ATTENTION_STORE).
     const STORE = globalThis.ATTENTION_STORE;
     const TITLES_KEY = "attention_video_titles";
 
@@ -380,8 +374,8 @@
     };
 
     // Two bookmarks are "the same" when they show the same hh:mm:ss, which is
-    // what happens when clicking repeatedly on a paused video. Duplicates were
-    // indistinguishable in the lists and DELETE removed them all at once.
+    // what happens when clicking repeatedly on a paused video. Duplicates can't
+    // be told apart in the lists, and DELETE would remove them all at once.
     const isSameTimestamp = (a, b) => Math.floor(a) === Math.floor(b);
 
     // Clicks are processed one at a time; otherwise two quick clicks could both

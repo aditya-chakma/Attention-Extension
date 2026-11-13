@@ -22,13 +22,6 @@
  *     - attention_temp_unblocks: { "<domain>": expiresAtMs }
  *
  * All values are JSON strings, like the bookmark keys.
- *
- * The Shorts/Reels toggles also cover the Shorts and Reels pages themselves
- * (youtube.com/shorts/..., facebook.com/reel/... and /reels/): with a toggle
- * on, those pages send the user to the site's home page. Direct loads are
- * redirected by the declarativeNetRequest rules from buildShortsReelsRules();
- * in-app navigation never reaches the network layer, so contentScript.js
- * catches it with shortsReelsToggleFor().
  */
 (() => {
     const SITES_KEY = "attention_blocked_sites";

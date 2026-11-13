@@ -5,8 +5,9 @@
  *
  * Every function returns a detached DOM element for the caller to append.
  * Dynamic values only ever go through textContent and attributes, never
- * innerHTML. Charts draw into a fixed viewBox and scale with the page; each
- * bar, point and cell carries a <title> (or title attribute) tooltip.
+ * innerHTML. Charts draw into a fixed viewBox and scale with the page. The
+ * daily charts and the heatmap show each day's numbers in a tooltip; the
+ * ranking prints its numbers.
  */
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -57,7 +58,7 @@ const yMaxLabel = (text) => el("div", "chart-y-max", text);
 
 /**
  * Headline number card. trend (optional): { text, direction: "up"|"down",
- * good: true|false|null } — e.g. "12% less than the 30 days before".
+ * good: true|false|null }; `good: null` draws a neutral arrow.
  */
 export const statCard = ({ label, value, sub, trend }) => {
     const card = el("div", "stat-card");
@@ -130,7 +131,7 @@ export const lineChart = ({ points, formatValue = String, ariaLabel }) => {
     );
     svg.appendChild(svgEl("polyline", { points: line, class: "chart-line", "vector-effect": "non-scaling-stroke" }));
     points.forEach((p, i) => {
-        // An invisible hover strip per day, wider than the dot, for the tooltip
+        // An invisible full-height strip per day carries the tooltip
         const hover = svgEl("rect", { x: x(i) - step / 2, y: 0, width: Math.max(step, 2), height: PLOT_H, class: "chart-hover" });
         tooltip(hover, `${p.tooltip ?? p.label}: ${formatValue(p.value)}`);
         svg.appendChild(hover);
