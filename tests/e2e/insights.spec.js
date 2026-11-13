@@ -73,6 +73,15 @@ test.describe("Insights page", () => {
         await expect(page).toHaveURL(`chrome-extension://${extensionId}/settings.html`);
     });
 
+    test("every extension page draws the Insights and Settings icons in its header", async ({ page, extensionId }) => {
+        for (const file of ["videos.html", "timestamps.html", "playlist.html?id=favorites", "settings.html", "insights.html", "blocked.html?site=example.com"]) {
+            await page.goto(`chrome-extension://${extensionId}/${file}`);
+            await expect(page.locator("header #insights-link svg"), file).toBeVisible();
+            await expect(page.locator("header #settings-link svg"), file).toBeVisible();
+            await expect(page.locator("header #insights-link"), file).toHaveAttribute("href", "insights.html");
+        }
+    });
+
     test("Clear statistics on the Settings page empties the Insights page", async ({ page, serviceWorker, extensionId }) => {
         await record(serviceWorker, { event: "blockedVisit", domain: "reddit.com" });
         await page.goto(`chrome-extension://${extensionId}/settings.html`);

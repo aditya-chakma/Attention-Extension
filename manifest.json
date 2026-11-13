@@ -1,7 +1,7 @@
 {
     "name": "Attention",
-    "version": "1.2.0",
-    "description": "Hide YouTube Shorts and Facebook Reels, block distracting sites on a schedule, and bookmark YouTube videos and timestamps.",
+    "version": "1.3.0",
+    "description": "Hide YouTube Shorts and Facebook Reels, block distracting sites on a schedule, see usage insights and bookmark YouTube videos.",
     "permissions": ["storage", "tabs", "alarms", "declarativeNetRequest", "idle"],
     "host_permissions": ["<all_urls>"],
     "background": {

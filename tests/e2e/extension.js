@@ -4,8 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// The extension is the repository root (manifest.json lives there)
-const extensionPath = path.resolve(here, "../..");
+// The extension is the repository root (manifest.json lives there), or the
+// unpacked Web Store zip when ATTENTION_EXTENSION_PATH points at one (see
+// scripts/test-package.sh)
+export const extensionPath = process.env.ATTENTION_EXTENSION_PATH
+    ? path.resolve(process.env.ATTENTION_EXTENSION_PATH)
+    : path.resolve(here, "../..");
 const fixturesDir = path.join(here, "fixtures");
 const ONE_PIXEL_PNG =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";

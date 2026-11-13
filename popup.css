@@ -61,7 +61,7 @@
   background-color: #e6efe9;
 }
 
-/* Same size for both icons regardless of the size baked into their markup */
+/* Same size for every header icon regardless of the size baked into its markup */
 .control-btn svg {
   width: 16px;
   height: 16px;

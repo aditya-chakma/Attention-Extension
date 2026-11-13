@@ -6,7 +6,7 @@
  * instead of an ES module:
  *  - as a content script before contentScript.js (see manifest.json)
  *  - via `import "./icons.js"` from the extension pages (dashboard.js, popup.js,
- *    settings.js, blocked.js)
+ *    settings.js, blocked.js, insights.js)
  *
  * Two kinds of entries:
  *  - ICON_PATHS: 24x24 Material icon path data for the YouTube player buttons,

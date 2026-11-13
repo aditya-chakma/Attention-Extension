@@ -17,6 +17,18 @@ describe("manifest.json", () => {
         expect(manifest.permissions).toContain("idle");
     });
 
+    it("has a description that fits the Chrome Web Store limit (132 characters)", () => {
+        expect(manifest.description.length).toBeLessThanOrEqual(132);
+    });
+
+    it("keeps package.json and package-lock.json on the manifest's version", () => {
+        const pkg = JSON.parse(read("package.json"));
+        const lock = JSON.parse(read("package-lock.json"));
+        expect(pkg.version).toBe(manifest.version);
+        expect(lock.version).toBe(manifest.version);
+        expect(lock.packages[""].version).toBe(manifest.version);
+    });
+
     it("can redirect any site the user blocks", () => {
         // Redirect rules need host access to the sites they redirect
         expect(manifest.host_permissions).toContain("<all_urls>");

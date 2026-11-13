@@ -34,7 +34,7 @@ header .brand {
     margin-right: auto;
 }
 
-/* Settings link at the top right, on every page */
+/* Insights and Settings links at the top right, on every page */
 .header-link {
     display: inline-flex;
     align-items: center;

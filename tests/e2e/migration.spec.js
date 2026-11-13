@@ -1,8 +1,5 @@
 import { test, expect, chromium } from "@playwright/test";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+import { extensionPath } from "./extension.js";
 
 // Launches Chromium with the unpacked extension on a reusable profile, so a
 // second launch sees the storage left behind by the first one
