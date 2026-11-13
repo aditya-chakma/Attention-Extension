@@ -297,3 +297,15 @@
 .pin-notice:empty {
     display: none;
 }
+
+/* ---- Usage statistics section ---- */
+
+.stats-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stats-actions a.btn {
+    text-decoration: none;
+}

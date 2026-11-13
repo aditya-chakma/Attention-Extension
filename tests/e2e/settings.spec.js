@@ -124,7 +124,7 @@ test.describe("Settings page", () => {
 
         await page.goto(pageUrl(extensionId) + "#pin");
         page.once("dialog", (dialog) => dialog.accept());
-        await page.locator(".btn-danger").click();
+        await page.locator("#pin-form .btn-danger").click();
         await expect(page.locator("#pin-notice")).toHaveText("PIN removed");
         await expect(page.locator(".pin-status")).toHaveText(
             "No PIN set: blocked pages don't offer a temporary unblock."

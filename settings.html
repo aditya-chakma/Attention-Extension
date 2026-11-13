@@ -14,6 +14,10 @@
                 <img class="logo" src="assets/ext-icon.png" alt="" />
                 <span>Attention</span>
             </a>
+            <a id="insights-link" class="header-link" href="insights.html" title="Insights">
+                <span class="icon" aria-hidden="true"></span>
+                <span>Insights</span>
+            </a>
             <a id="settings-link" class="header-link active" aria-current="page" href="settings.html" title="Settings">
                 <span class="icon" aria-hidden="true"></span>
                 <span>Settings</span>
@@ -73,6 +77,19 @@
                     </p>
                     <!-- settings.js renders the form for the current state -->
                     <div id="pin-body"></div>
+                </section>
+
+                <section class="settings-section" aria-labelledby="stats-title">
+                    <h2 id="stats-title">Usage statistics</h2>
+                    <p class="section-hint">
+                        The Insights page counts removed Shorts and Reels, blocked visits, temporary unblocks and
+                        screen time, kept on this device for 180 days.
+                    </p>
+                    <div class="stats-actions">
+                        <a class="btn" href="insights.html">Open Insights</a>
+                        <button id="clear-stats" type="button" class="btn btn-danger">Clear statistics</button>
+                    </div>
+                    <div id="stats-notice" class="pin-notice" role="status"></div>
                 </section>
             </section>
         </main>

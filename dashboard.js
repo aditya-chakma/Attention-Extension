@@ -734,6 +734,8 @@ const render = async () => {
 const drawHeaderIcons = () => {
     const icon = document.querySelector("#settings-link .icon");
     if (icon) icon.innerHTML = globalThis.ATTENTION_ICONS.markup.gear;
+    const insightsIcon = document.querySelector("#insights-link .icon");
+    if (insightsIcon) insightsIcon.innerHTML = globalThis.ATTENTION_ICONS.markup.insights;
 };
 
 document.addEventListener("DOMContentLoaded", () => {

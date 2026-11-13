@@ -2,11 +2,13 @@
 // the unblock PIN. All data lives in settingsStore.js; this module only
 // renders it and forwards changes. The static page shell is settings.html.
 
-// Publish globalThis.ATTENTION_ICONS and globalThis.ATTENTION_SETTINGS
+// Publish globalThis.ATTENTION_ICONS, ATTENTION_SETTINGS and ATTENTION_STATS
 import "./icons.js";
 import "./settingsStore.js";
+import "./statsStore.js";
 
 const SETTINGS = globalThis.ATTENTION_SETTINGS;
+const STATS = globalThis.ATTENTION_STATS;
 const { trash: TRASH_ICON, edit: EDIT_ICON } = globalThis.ATTENTION_ICONS.markup;
 
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -367,6 +369,15 @@ const renderPin = (pinHash) => {
     body.appendChild(form);
 };
 
+// ---- Usage statistics ---------------------------------------------------------
+
+const clearStats = async () => {
+    const accepted = window.confirm("Clear all usage statistics? The Insights page starts over from nothing.");
+    if (!accepted) return;
+    await STATS.clearStats();
+    document.getElementById("stats-notice").textContent = "Statistics cleared";
+};
+
 // ---- Page -------------------------------------------------------------------
 
 const render = async () => {
@@ -378,6 +389,8 @@ const render = async () => {
 
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector("#settings-link .icon").innerHTML = globalThis.ATTENTION_ICONS.markup.gear;
+    document.querySelector("#insights-link .icon").innerHTML = globalThis.ATTENTION_ICONS.markup.insights;
+    document.getElementById("clear-stats").addEventListener("click", clearStats);
     bindAddSiteForm();
     bindHideToggles();
     render();

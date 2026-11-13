@@ -73,19 +73,30 @@ afterEach(() => {
 });
 
 describe("page navigation", () => {
-    it("every page has the Settings link in its header, next to the Attention brand", () => {
-        for (const file of ["settings.html", "videos.html", "timestamps.html", "playlist.html", "blocked.html"]) {
+    const ALL_PAGES = ["settings.html", "videos.html", "timestamps.html", "playlist.html", "blocked.html", "insights.html"];
+
+    it("every page has the Settings and Insights links in its header, next to the Attention brand", () => {
+        for (const file of ALL_PAGES) {
             const header = read(file).match(/<header>([\s\S]*?)<\/header>/)[1];
             expect(header, `${file} header`).toContain('class="brand" href="videos.html"');
             expect(header, `${file} header`).toContain('id="settings-link"');
             expect(header, `${file} header`).toContain('href="settings.html"');
+            expect(header, `${file} header`).toContain('id="insights-link"');
+            expect(header, `${file} header`).toContain('href="insights.html"');
         }
     });
 
     it("marks the header link current on the settings page only", () => {
         expect(read("settings.html")).toContain('id="settings-link" class="header-link active" aria-current="page"');
-        for (const file of ["videos.html", "timestamps.html", "playlist.html", "blocked.html"]) {
+        for (const file of ALL_PAGES.filter((f) => f !== "settings.html")) {
             expect(read(file)).toContain('id="settings-link" class="header-link" href="settings.html"');
+        }
+    });
+
+    it("marks the Insights link current on the insights page only", () => {
+        expect(read("insights.html")).toContain('id="insights-link" class="header-link active" aria-current="page"');
+        for (const file of ALL_PAGES.filter((f) => f !== "insights.html")) {
+            expect(read(file)).toContain('id="insights-link" class="header-link" href="insights.html"');
         }
     });
 
@@ -100,9 +111,47 @@ describe("page navigation", () => {
         expect(read("settings.html")).not.toContain('id="tab-');
     });
 
-    it("draws the gear icon into the header link", async () => {
+    it("draws the gear and insights icons into the header links", async () => {
         await renderPage();
         expect(document.querySelector("#settings-link .icon svg")).not.toBeNull();
+        expect(document.querySelector("#insights-link .icon svg")).not.toBeNull();
+    });
+});
+
+describe("usage statistics", () => {
+    const DAY_KEY = "attention_stats_day_2026-11-13";
+
+    beforeEach(() => {
+        chrome.__storageData[DAY_KEY] = JSON.stringify({ shortsRemoved: 3 });
+        chrome.__storageData["attention_stats_meta"] = JSON.stringify({ trackingSince: "2026-11-13" });
+    });
+
+    it("clears every statistic after a confirmation and says so", async () => {
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        await renderPage();
+
+        document.getElementById("clear-stats").click();
+        await flushPromises();
+
+        expect(chrome.__storageData[DAY_KEY]).toBeUndefined();
+        expect(chrome.__storageData["attention_stats_meta"]).toBeUndefined();
+        expect(text("#stats-notice")).toBe("Statistics cleared");
+    });
+
+    it("keeps everything when the confirmation is declined", async () => {
+        vi.spyOn(window, "confirm").mockReturnValue(false);
+        await renderPage();
+
+        document.getElementById("clear-stats").click();
+        await flushPromises();
+
+        expect(chrome.__storageData[DAY_KEY]).toBeDefined();
+        expect(text("#stats-notice")).toBe("");
+    });
+
+    it("links to the Insights page", async () => {
+        await renderPage();
+        expect(document.querySelector('.stats-actions a[href="insights.html"]')).not.toBeNull();
     });
 });
 
@@ -330,7 +379,7 @@ describe("unblock PIN", () => {
 
         expect(text(".pin-status")).toBe("No PIN set: blocked pages don't offer a temporary unblock.");
         expect(text("#pin-form button[type=submit]")).toBe("Set PIN");
-        expect(document.querySelector(".btn-danger")).toBeNull();
+        expect(document.querySelector("#pin-form .btn-danger, .pin-actions .btn-danger")).toBeNull();
     });
 
     it("sets a PIN when both entries match, stores only the hash and says so", async () => {

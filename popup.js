@@ -98,6 +98,7 @@ const bindHeaderButton = (id, iconName, pageFile) => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     bindHeaderButton("open-dashboard", "dashboardGrid", "videos.html");
+    bindHeaderButton("open-insights", "insights", "insights.html");
     bindHeaderButton("open-settings", "gear", "settings.html");
 
     const activeTab = await getActiveTabURL();

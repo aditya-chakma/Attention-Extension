@@ -12,6 +12,7 @@ const renderPopup = async (tab) => {
             </div>
         </div>
         <button id="open-dashboard" class="icon-btn" aria-label="Open bookmarks dashboard"></button>
+        <button id="open-insights" class="icon-btn" aria-label="Open insights"></button>
         <button id="open-settings" class="icon-btn" aria-label="Open settings"></button>`;
     chrome.tabs.query.mockResolvedValue(tab ? [tab] : []);
     document.dispatchEvent(new Event("DOMContentLoaded"));
@@ -129,6 +130,18 @@ describe("popup", () => {
         const items = document.querySelectorAll("#bookmarks .bookmark");
         expect(items).toHaveLength(1);
         expect(items[0].id).toBe("bookmark-65");
+    });
+
+    it("the insights icon opens the insights page in a new tab", async () => {
+        await renderPopup(WATCH_TAB);
+
+        const button = document.getElementById("open-insights");
+        expect(button.querySelector("svg")).not.toBeNull();
+        button.click();
+
+        expect(chrome.tabs.create).toHaveBeenCalledWith({
+            url: "chrome-extension://test-extension-id/insights.html",
+        });
     });
 
     it("the settings gear opens the settings page in a new tab", async () => {

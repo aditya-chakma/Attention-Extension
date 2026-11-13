@@ -264,6 +264,12 @@ describe("record (storage)", () => {
         expect(JSON.parse(chrome.__storageData[META_KEY])).toEqual({ trackingSince: "2026-10-01" });
     });
 
+    it("moves the tracking start back when an earlier day is written", async () => {
+        seedMeta({ trackingSince: "2026-11-01" });
+        await STATS.record({ event: "redirect", kind: "reels" }, new Date(2026, 9, 20));
+        expect(JSON.parse(chrome.__storageData[META_KEY])).toEqual({ trackingSince: "2026-10-20" });
+    });
+
     it("files events under the local day they happened", async () => {
         await STATS.record({ event: "redirect", kind: "shorts" }, new Date(2026, 10, 11, 23, 59));
         await STATS.record({ event: "redirect", kind: "shorts" }, new Date(2026, 10, 12, 0, 1));

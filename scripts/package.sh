@@ -35,6 +35,10 @@ FILES=(
     settings.html
     settings.js
     settings.css
+    insights.html
+    insights.js
+    insights.css
+    charts.js
     dashboard.css
     assets
     LICENSE

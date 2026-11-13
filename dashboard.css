@@ -24,10 +24,14 @@ body {
 header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 16px;
     padding: 20px 32px;
     border-bottom: 1px solid var(--border);
+}
+
+/* The links (Insights, Settings) group at the top right */
+header .brand {
+    margin-right: auto;
 }
 
 /* Settings link at the top right, on every page */

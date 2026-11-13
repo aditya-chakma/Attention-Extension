@@ -354,7 +354,11 @@
 
             const items = { [key]: JSON.stringify(updated) };
             const meta = parse(data[META_KEY], {});
-            if (!meta.trackingSince) items[META_KEY] = JSON.stringify({ ...meta, trackingSince: day });
+            // trackingSince is the earliest day ever written (tests and tools
+            // may record into past days; live events always land on today)
+            if (!meta.trackingSince || day < meta.trackingSince) {
+                items[META_KEY] = JSON.stringify({ ...meta, trackingSince: day });
+            }
             await setLocal(items);
 
             if (isNewDay) await pruneOldDays(now);
